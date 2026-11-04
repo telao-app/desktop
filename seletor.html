@@ -23,7 +23,7 @@
   window.escolher = (fontes) => new Promise((resolve) => {
     for (const f of fontes) {
       const b = document.createElement('button');
-      const img = Object.assign(document.createElement('img'), { src: f.miniatura });
+      const img = Object.assign(document.createElement('img'), f.miniatura ? { src: f.miniatura } : {});
       const nome = Object.assign(document.createElement('span'), { textContent: f.nome });
       b.append(img, nome);
       b.onclick = () => resolve(f.id);

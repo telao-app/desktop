@@ -10,7 +10,7 @@ app.whenReady().then(async () => {
     await systemPreferences.askForMediaAccess('camera');
   }
   session.defaultSession.setDisplayMediaRequestHandler(async (req, callback) => {
-    const fontes = await desktopCapturer.getSources({ types: ['screen', 'window'] }).catch(() => []);
+    const fontes = await desktopCapturer.getSources({ types: ['screen', 'window'], fetchWindowIcons: true }).catch(() => []);
     if (!fontes.length) {
       callback(null);
       if (process.platform === 'darwin') {
@@ -20,7 +20,8 @@ app.whenReady().then(async () => {
       return;
     }
     // Linux/Wayland: o seletor do sistema já escolheu e só vem uma fonte
-    const id = fontes.length === 1 ? fontes[0].id : await escolherFonte(fontes);
+    // fechar o seletor no X pode rejeitar no meio do caminho: sem responder, o pedido trava e o app não compartilha mais
+    const id = fontes.length === 1 ? fontes[0].id : await escolherFonte(fontes).catch(() => null);
     const escolha = fontes.find((f) => f.id === id);
     if (!escolha) return callback(null);
     // som do sistema só se a página pediu (entregar sem pedir, ou não entregar o pedido, quebra a captura).
@@ -38,16 +39,18 @@ let janela;
 
 async function escolherFonte(fontes) {
   const visiveis = fontes
-    .filter((f) => f.name && f.name !== app.getName() && !f.thumbnail.isEmpty())
-    // janelas internas do macOS (ícones do Stage Manager, overlays) não são transmissíveis
+    .filter((f) => f.name && f.name !== app.getName())
+    // macOS: janelas sem miniatura são internas (Stage Manager, overlays). No Windows é janela minimizada,
+    // como um jogo em tela cheia quando se dá alt-tab: entra com o ícone do app no lugar da miniatura.
+    .filter((f) => process.platform !== 'darwin' || !f.thumbnail.isEmpty())
     .filter((f) => !['App Icon Window', 'Gesture Blocking Overlay'].includes(f.name))
-    .map((f) => ({ id: f.id, nome: f.name, miniatura: f.thumbnail.toDataURL() }));
+    .map((f) => ({ id: f.id, nome: f.name, miniatura: (f.thumbnail.isEmpty() ? f.appIcon : f.thumbnail)?.toDataURL() }));
   const seletor = new BrowserWindow({
     parent: janela, modal: true, width: 900, height: 600, autoHideMenuBar: true, backgroundColor: '#111214',
   });
   await seletor.loadFile(path.join(__dirname, 'seletor.html'));
   const fechou = new Promise((resolve) => seletor.once('closed', () => resolve(null)));
-  const id = await Promise.race([seletor.webContents.executeJavaScript(`escolher(${JSON.stringify(visiveis)})`), fechou]);
+  const id = await Promise.race([seletor.webContents.executeJavaScript(`escolher(${JSON.stringify(visiveis)})`).catch(() => null), fechou]);
   if (!seletor.isDestroyed()) seletor.close();
   return id;
 }
