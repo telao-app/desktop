@@ -22,6 +22,11 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
+      # som só do programa da janela transmitida (Windows): compila o nativo/telao-som.cpp
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+      - run: cl /nologo /EHsc /O2 /std:c++17 nativo\telao-som.cpp /Fe:build\telao-som.exe ole32.lib mmdevapi.lib
+        if: runner.os == 'Windows'
       - run: npm run dist
       - uses: actions/upload-artifact@v4
         with:
@@ -33,6 +38,8 @@ jobs:
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
+          # tag com "-" (ex.: v0.1.2-beta.0) vira pré-lançamento: dá para testar sem mudar o link "latest"
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             dist/*.dmg
             dist/*.exe

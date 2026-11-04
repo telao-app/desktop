@@ -1,5 +1,6 @@
 const path = require('node:path');
-const { app, BrowserWindow, desktopCapturer, dialog, session, shell, systemPreferences } = require('electron');
+const { spawn } = require('node:child_process');
+const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, session, shell, systemPreferences } = require('electron');
 
 // ponytail: carrega o site; quando o front for empacotado aqui dentro, deixa de depender do servidor entregar o código
 const URL_TELAO = process.env.TELAO_URL || 'https://telao.nyxdev.com.br';
@@ -9,20 +10,16 @@ app.whenReady().then(async () => {
     await systemPreferences.askForMediaAccess('microphone');
     await systemPreferences.askForMediaAccess('camera');
   }
+  // Windows: o preload abre o seletor antes do getDisplayMedia para saber se é janela (som só do programa dela)
+  ipcMain.handle('escolher-fonte', async () => {
+    escolhida = await escolher();
+    return escolhida && { id: escolhida.id, janela: escolhida.id.startsWith('window:') };
+  });
+  ipcMain.on('som-janela', (e, id) => somDaJanela(e.sender, id));
+
   session.defaultSession.setDisplayMediaRequestHandler(async (req, callback) => {
-    const fontes = await desktopCapturer.getSources({ types: ['screen', 'window'], fetchWindowIcons: true }).catch(() => []);
-    if (!fontes.length) {
-      callback(null);
-      if (process.platform === 'darwin') {
-        await dialog.showMessageBox({ message: 'Libere o app em Ajustes > Privacidade e Segurança > Gravação de Tela e Áudio do Sistema, depois reabra o app.' });
-        shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
-      }
-      return;
-    }
-    // Linux/Wayland: o seletor do sistema já escolheu e só vem uma fonte
-    // fechar o seletor no X pode rejeitar no meio do caminho: sem responder, o pedido trava e o app não compartilha mais
-    const id = fontes.length === 1 ? fontes[0].id : await escolherFonte(fontes).catch(() => null);
-    const escolha = fontes.find((f) => f.id === id);
+    const escolha = escolhida ?? (await escolher());
+    escolhida = null;
     if (!escolha) return callback(null);
     // som do sistema só se a página pediu (entregar sem pedir, ou não entregar o pedido, quebra a captura).
     // No Mac só funciona com o app aberto por conta própria: aberto por terminal, o macOS dá a permissão ao terminal.
@@ -31,11 +28,32 @@ app.whenReady().then(async () => {
     callback({ video: escolha, audio: som ? 'loopback' : undefined });
   });
 
-  janela = new BrowserWindow({ width: 1280, height: 800, autoHideMenuBar: true, backgroundColor: '#111214' });
+  janela = new BrowserWindow({
+    width: 1280, height: 800, autoHideMenuBar: true, backgroundColor: '#111214',
+    webPreferences: { preload: path.join(__dirname, 'preload.js') },
+  });
   janela.loadURL(URL_TELAO);
 });
 
 let janela;
+let escolhida = null;
+let captura = null;
+
+// Abre o seletor e devolve a fonte escolhida (null = cancelou ou sem permissão).
+async function escolher() {
+  const fontes = await desktopCapturer.getSources({ types: ['screen', 'window'], fetchWindowIcons: true }).catch(() => []);
+  if (!fontes.length) {
+    if (process.platform === 'darwin') {
+      dialog.showMessageBox({ message: 'Libere o app em Ajustes > Privacidade e Segurança > Gravação de Tela e Áudio do Sistema, depois reabra o app.' })
+        .then(() => shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'));
+    }
+    return null;
+  }
+  // Linux/Wayland: o seletor do sistema já escolheu e só vem uma fonte
+  // fechar o seletor no X pode rejeitar no meio do caminho: sem responder, o pedido trava e o app não compartilha mais
+  const id = fontes.length === 1 ? fontes[0].id : await escolherFonte(fontes).catch(() => null);
+  return fontes.find((f) => f.id === id) ?? null;
+}
 
 async function escolherFonte(fontes) {
   const visiveis = fontes
@@ -53,6 +71,24 @@ async function escolherFonte(fontes) {
   const id = await Promise.race([seletor.webContents.executeJavaScript(`escolher(${JSON.stringify(visiveis)})`).catch(() => null), fechou]);
   if (!seletor.isDestroyed()) seletor.close();
   return id;
+}
+
+// Windows: roda o telao-som.exe no processo da janela ("window:<hwnd>:0") e repassa o PCM para a página.
+function somDaJanela(pagina, id) {
+  captura?.kill();
+  captura = null;
+  if (!id) return;
+  captura = spawn(path.join(process.resourcesPath, 'telao-som.exe'), [id.split(':')[1]]);
+  let resto = Buffer.alloc(0);
+  captura.stdout.on('data', (dados) => {
+    // o pipe corta em qualquer byte; manda só quadros inteiros (4 bytes: 2 canais de 16 bits)
+    const tudo = Buffer.concat([resto, dados]);
+    const n = tudo.length - (tudo.length % 4);
+    resto = tudo.subarray(n);
+    if (n && !pagina.isDestroyed()) pagina.send('som-janela', tudo.subarray(0, n));
+  });
+  captura.on('error', (e) => console.error('telao-som:', e.message));
+  captura.on('exit', (codigo) => codigo && console.error('telao-som saiu com', codigo));
 }
 
 app.on('window-all-closed', () => app.quit());
