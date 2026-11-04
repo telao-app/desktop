@@ -1,5 +1,7 @@
 // Captura o som de um único programa no Windows (loopback por processo, Windows 10 2004+) e escreve no stdout
 // como PCM 16 bits, 48 kHz, estéreo. Uso: telao-som.exe <hwnd da janela escolhida>
+// telao-som.exe --janelas lista as janelas ("hwnd<TAB>pid<TAB>título" em UTF-8): o seletor do Chromium esconde
+// jogos em tela cheia (não respondem a tempo à checagem dele) e o app junta esta lista à dele.
 // Baseado no ApplicationLoopback do Windows-classic-samples da Microsoft.
 #include <windows.h>
 #include <audioclient.h>
@@ -8,6 +10,8 @@
 #include <wrl/implements.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cwchar>
+#include <dwmapi.h>
 #include <fcntl.h>
 #include <io.h>
 #include <vector>
@@ -32,8 +36,27 @@ class Ativacao : public Microsoft::WRL::RuntimeClass<Microsoft::WRL::RuntimeClas
   }
 };
 
+static BOOL CALLBACK listar(HWND janela, LPARAM) {
+  if (!IsWindowVisible(janela) || GetWindow(janela, GW_OWNER) || (GetWindowLongW(janela, GWL_EXSTYLE) & WS_EX_TOOLWINDOW))
+    return TRUE;
+  BOOL oculta = FALSE;  // janelas "cloaked": apps da loja suspensos, outras áreas de trabalho
+  DwmGetWindowAttribute(janela, DWMWA_CLOAKED, &oculta, sizeof oculta);
+  wchar_t titulo[512];
+  int n = GetWindowTextW(janela, titulo, 512);
+  if (oculta || !n) return TRUE;
+  for (int i = 0; i < n; i++)
+    if (titulo[i] == L'\t' || titulo[i] == L'\n' || titulo[i] == L'\r') titulo[i] = L' ';
+  char utf8[2048];
+  int m = WideCharToMultiByte(CP_UTF8, 0, titulo, n, utf8, sizeof utf8, nullptr, nullptr);
+  DWORD pid = 0;
+  GetWindowThreadProcessId(janela, &pid);
+  printf("%lld\t%lu\t%.*s\n", static_cast<long long>(reinterpret_cast<INT_PTR>(janela)), pid, m, utf8);
+  return TRUE;
+}
+
 int wmain(int argc, wchar_t** argv) {
   if (argc < 2) return 2;
+  if (wcscmp(argv[1], L"--janelas") == 0) return EnumWindows(listar, 0) ? 0 : 1;
   DWORD pid = 0;
   GetWindowThreadProcessId(reinterpret_cast<HWND>(static_cast<INT_PTR>(_wtoi64(argv[1]))), &pid);
   if (!pid) return 3;

@@ -25,7 +25,7 @@ jobs:
       # som só do programa da janela transmitida (Windows): compila o nativo/telao-som.cpp
       - uses: ilammy/msvc-dev-cmd@v1
         if: runner.os == 'Windows'
-      - run: cl /nologo /EHsc /O2 /std:c++17 nativo\telao-som.cpp /Fe:build\telao-som.exe ole32.lib mmdevapi.lib user32.lib
+      - run: cl /nologo /EHsc /O2 /std:c++17 nativo\telao-som.cpp /Fe:build\telao-som.exe ole32.lib mmdevapi.lib user32.lib dwmapi.lib
         if: runner.os == 'Windows'
       - run: npm run dist
       - uses: actions/upload-artifact@v4

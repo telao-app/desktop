@@ -1,6 +1,6 @@
 const path = require('node:path');
-const { spawn } = require('node:child_process');
-const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, session, shell, systemPreferences } = require('electron');
+const { execFile, spawn } = require('node:child_process');
+const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, nativeImage, session, shell, systemPreferences } = require('electron');
 const { autoUpdater } = require('electron-updater');
 
 // ponytail: carrega o site; quando o front for empacotado aqui dentro, deixa de depender do servidor entregar o código
@@ -26,7 +26,7 @@ app.whenReady().then(async () => {
     // No Mac só funciona com o app aberto por conta própria: aberto por terminal, o macOS dá a permissão ao terminal.
     // ponytail: Linux sem som do sistema; dá para capturar o monitor do PipeWire como microfone
     const som = req.audioRequested && process.platform !== 'linux';
-    callback({ video: escolha, audio: som ? 'loopback' : undefined });
+    callback({ video: { id: escolha.id, name: escolha.name }, audio: som ? 'loopback' : undefined });
   });
 
   janela = new BrowserWindow({
@@ -40,10 +40,12 @@ app.whenReady().then(async () => {
 let janela;
 let escolhida = null;
 let captura = null;
+const nativo = path.join(process.resourcesPath, 'telao-som.exe');
 
 // Abre o seletor e devolve a fonte escolhida (null = cancelou ou sem permissão).
 async function escolher() {
   const fontes = await desktopCapturer.getSources({ types: ['screen', 'window'], fetchWindowIcons: true }).catch(() => []);
+  if (process.platform === 'win32') fontes.push(...(await janelasEscondidas(fontes)));
   if (!fontes.length) {
     if (process.platform === 'darwin') {
       dialog.showMessageBox({ message: 'Libere o app em Ajustes > Privacidade e Segurança > Gravação de Tela e Áudio do Sistema, depois reabra o app.' })
@@ -75,12 +77,25 @@ async function escolherFonte(fontes) {
   return id;
 }
 
+// Windows: janelas que o Chromium não lista (jogo em tela cheia não responde a tempo à checagem dele).
+// O id "window:<hwnd>:0" é o mesmo formato dele, então a captura funciona igual.
+function janelasEscondidas(fontes) {
+  return new Promise((resolve) => {
+    execFile(nativo, ['--janelas'], { timeout: 3000 }, (erro, saida) => {
+      if (erro) return resolve([]);
+      const listadas = new Set(fontes.map((f) => f.id.split(':')[1]));
+      resolve(saida.split('\n').map((l) => l.split('\t')).filter(([hwnd, pid, nome]) => nome && Number(pid) !== process.pid && !listadas.has(hwnd))
+        .map(([hwnd, , nome]) => ({ id: `window:${hwnd}:0`, name: nome.trim(), thumbnail: nativeImage.createEmpty(), appIcon: null })));
+    });
+  });
+}
+
 // Windows: roda o telao-som.exe no processo da janela ("window:<hwnd>:0") e repassa o PCM para a página.
 function somDaJanela(pagina, id) {
   captura?.kill();
   captura = null;
   if (!id) return;
-  captura = spawn(path.join(process.resourcesPath, 'telao-som.exe'), [id.split(':')[1]]);
+  captura = spawn(nativo, [id.split(':')[1]]);
   let resto = Buffer.alloc(0);
   captura.stdout.on('data', (dados) => {
     // o pipe corta em qualquer byte; manda só quadros inteiros (4 bytes: 2 canais de 16 bits)
