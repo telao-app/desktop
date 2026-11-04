@@ -129,8 +129,16 @@ async function diagnostico() {
     });
     return linhas.join('\\n');
   })()`).catch((e) => 'Erro: ' + e.message);
-  const { response } = await dialog.showMessageBox(janela, { message: 'Diagnóstico da transmissão', detail: `Telão ${app.getVersion()} · ${process.platform}\n${texto}`, buttons: ['Copiar', 'Fechar'] });
-  if (response === 0) clipboard.writeText(`Telão ${app.getVersion()} · ${process.platform}\n${texto}`);
+  let janelas = '';
+  if (process.platform === 'win32') {
+    // onde o jogo some: na lista do Chromium, na do Windows (telao-som --janelas) ou nas duas
+    const chromium = await desktopCapturer.getSources({ types: ['window'] }).catch(() => []);
+    const windows = await new Promise((r) => execFile(nativo, ['--janelas'], { timeout: 3000 }, (e, saida) => r(e ? `erro: ${e.message}` : saida.split('\n').map((l) => l.split('\t')[2]).filter(Boolean).join(' | '))));
+    janelas = `\nJanelas (Chromium): ${chromium.map((f) => f.name).join(' | ')}\nJanelas (Windows): ${windows}`;
+  }
+  const relatorio = `Telão ${app.getVersion()} · ${process.platform}\n${texto}${janelas}`;
+  const { response } = await dialog.showMessageBox(janela, { message: 'Diagnóstico da transmissão', detail: relatorio, buttons: ['Copiar', 'Fechar'] });
+  if (response === 0) clipboard.writeText(relatorio);
 }
 
 // Windows/Linux: baixa a versão nova das releases do GitHub e instala ao fechar o app.
