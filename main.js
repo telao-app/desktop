@@ -1,6 +1,6 @@
 const path = require('node:path');
 const { execFile, spawn } = require('node:child_process');
-const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, nativeImage, session, shell, systemPreferences } = require('electron');
+const { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, nativeImage, session, shell, systemPreferences } = require('electron');
 const { autoUpdater } = require('electron-updater');
 
 // ponytail: carrega o site; quando o front for empacotado aqui dentro, deixa de depender do servidor entregar o código
@@ -34,6 +34,10 @@ app.whenReady().then(async () => {
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
   janela.loadURL(URL_TELAO);
+  // Ctrl+Shift+D (⌘⇧D no Mac): o que a minha tela está enviando e por que está limitada
+  janela.webContents.on('before-input-event', (_e, t) => {
+    if (t.type === 'keyDown' && (t.control || t.meta) && t.shift && t.key.toLowerCase() === 'd') diagnostico();
+  });
   if (app.isPackaged) atualizar();
 });
 
@@ -106,6 +110,27 @@ function somDaJanela(pagina, id) {
   });
   captura.on('error', (e) => console.error('telao-som:', e.message));
   captura.on('exit', (codigo) => codigo && console.error('telao-som saiu com', codigo));
+}
+
+async function diagnostico() {
+  const texto = await janela.webContents.executeJavaScript(`(async () => {
+    const pub = window.__voice?.room.localParticipant.getTrackPublication('screen_share');
+    if (!pub?.track) return 'Você não está transmitindo a tela.';
+    const c = pub.track.mediaStreamTrack.getSettings();
+    const linhas = ['Captura: ' + c.width + 'x' + c.height + ' @ ' + c.frameRate];
+    (await pub.track.sender.getStats()).forEach((s) => {
+      if (s.type !== 'outbound-rtp' || s.kind !== 'video') return;
+      const d = s.qualityLimitationDurations || {};
+      linhas.push('Enviando: ' + s.frameWidth + 'x' + s.frameHeight + ' a ' + s.framesPerSecond + ' fps',
+        'Limitado por: ' + s.qualityLimitationReason + ' (cpu ' + Math.round(d.cpu || 0) + 's, banda ' + Math.round(d.bandwidth || 0) + 's)',
+        'Codificador: ' + s.encoderImplementation + (s.powerEfficientEncoder ? ' (placa)' : ' (processador)'),
+        'Codificação: ' + (1000 * s.totalEncodeTime / s.framesEncoded).toFixed(1) + ' ms/quadro',
+        'Alvo: ' + Math.round((s.targetBitrate || 0) / 1000) + ' kbps');
+    });
+    return linhas.join('\\n');
+  })()`).catch((e) => 'Erro: ' + e.message);
+  const { response } = await dialog.showMessageBox(janela, { message: 'Diagnóstico da transmissão', detail: `Telão ${app.getVersion()} · ${process.platform}\n${texto}`, buttons: ['Copiar', 'Fechar'] });
+  if (response === 0) clipboard.writeText(`Telão ${app.getVersion()} · ${process.platform}\n${texto}`);
 }
 
 // Windows/Linux: baixa a versão nova das releases do GitHub e instala ao fechar o app.
