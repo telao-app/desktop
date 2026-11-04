@@ -1,6 +1,7 @@
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { app, BrowserWindow, desktopCapturer, dialog, ipcMain, session, shell, systemPreferences } = require('electron');
+const { autoUpdater } = require('electron-updater');
 
 // ponytail: carrega o site; quando o front for empacotado aqui dentro, deixa de depender do servidor entregar o código
 const URL_TELAO = process.env.TELAO_URL || 'https://telao.nyxdev.com.br';
@@ -33,6 +34,7 @@ app.whenReady().then(async () => {
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
   janela.loadURL(URL_TELAO);
+  if (app.isPackaged) atualizar();
 });
 
 let janela;
@@ -89,6 +91,19 @@ function somDaJanela(pagina, id) {
   });
   captura.on('error', (e) => console.error('telao-som:', e.message));
   captura.on('exit', (codigo) => codigo && console.error('telao-som saiu com', codigo));
+}
+
+// Windows/Linux: baixa a versão nova das releases do GitHub e instala ao fechar o app.
+// Mac: a atualização automática exige app assinado pela Apple; só avisa e abre o download.
+async function atualizar() {
+  if (process.platform !== 'darwin') return autoUpdater.checkForUpdatesAndNotify().catch((e) => console.error('atualização:', e.message));
+  const ultima = await fetch('https://api.github.com/repos/telao-app/telao-app-desktop/releases/latest').then((r) => r.json()).catch(() => null);
+  const partes = (v) => String(v).replace(/^v/, '').split(/[.-]/).slice(0, 3).map(Number);
+  const [a, b] = [partes(ultima?.tag_name), partes(app.getVersion())];
+  const nova = a.findIndex((n, i) => n !== b[i]);
+  if (nova < 0 || !(a[nova] > b[nova])) return;
+  const { response } = await dialog.showMessageBox({ message: `Versão nova do Telão: ${ultima.tag_name}`, buttons: ['Baixar', 'Depois'] });
+  if (response === 0) shell.openExternal('https://github.com/telao-app/telao-app-desktop/releases/latest/download/Telao-mac.dmg');
 }
 
 app.on('window-all-closed', () => app.quit());

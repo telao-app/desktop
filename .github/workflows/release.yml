@@ -40,7 +40,10 @@ jobs:
         with:
           # tag com "-" (ex.: v0.1.2-beta.0) vira pré-lançamento: dá para testar sem mudar o link "latest"
           prerelease: ${{ contains(github.ref_name, '-') }}
+          # latest*.yml e .blockmap: o atualizador automático lê daqui
           files: |
             dist/*.dmg
             dist/*.exe
             dist/*.AppImage
+            dist/latest*.yml
+            dist/*.blockmap
