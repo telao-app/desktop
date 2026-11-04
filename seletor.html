@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Transmitir</title>
+<style>
+  body { margin: 0; padding: 20px; background: #111214; color: #f2f3f5; font: 14px system-ui, sans-serif; }
+  h2 { font-size: 13px; text-transform: uppercase; color: #949ba4; margin: 16px 0 8px; }
+  .grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  button { background: #1e1f22; border: 2px solid transparent; border-radius: 8px; padding: 8px; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+  button:hover, button:focus { border-color: #5865f2; outline: none; }
+  img { width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #000; border-radius: 4px; display: block; margin-bottom: 6px; }
+  span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+<h2>Telas</h2>
+<div class="grade" id="screen"></div>
+<h2>Janelas</h2>
+<div class="grade" id="window"></div>
+<script>
+  // chamado pelo main.js via executeJavaScript; resolve com o id escolhido (fechar a janela = cancelar)
+  window.escolher = (fontes) => new Promise((resolve) => {
+    for (const f of fontes) {
+      const b = document.createElement('button');
+      const img = Object.assign(document.createElement('img'), { src: f.miniatura });
+      const nome = Object.assign(document.createElement('span'), { textContent: f.nome });
+      b.append(img, nome);
+      b.onclick = () => resolve(f.id);
+      document.getElementById(f.id.split(':')[0]).append(b);
+    }
+    document.onkeydown = (e) => e.key === 'Escape' && resolve(null);
+  });
+</script>
+</body>
+</html>
