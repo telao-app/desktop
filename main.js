@@ -1,3 +1,5 @@
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { execFile, spawn } = require('node:child_process');
 const { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, nativeImage, session, shell, systemPreferences } = require('electron');
@@ -141,17 +143,54 @@ async function diagnostico() {
   if (response === 0) clipboard.writeText(relatorio);
 }
 
-// Windows/Linux: baixa a versão nova das releases do GitHub e instala ao fechar o app.
-// Mac: a atualização automática exige app assinado pela Apple; só avisa e abre o download.
-async function atualizar() {
-  if (process.platform !== 'darwin') return autoUpdater.checkForUpdatesAndNotify().catch((e) => console.error('atualização:', e.message));
-  const ultima = await fetch('https://api.github.com/repos/telao-app/telao-app-desktop/releases/latest').then((r) => r.json()).catch(() => null);
+// Baixa a versão nova em segundo plano e pergunta se reinicia agora; "Depois" instala ao fechar o app.
+// Windows/Linux: electron-updater. Mac: troca o próprio Telao.app (o atualizador do Electron no Mac exige assinatura da Apple).
+let pronta = false;
+function atualizar() {
+  const checar = () => !pronta && (process.platform === 'darwin' ? atualizarMac() : autoUpdater.checkForUpdates()).catch((e) => console.error('atualização:', e.message));
+  autoUpdater.on('update-downloaded', (i) => perguntar(i.version, () => autoUpdater.quitAndInstall(true, true)));
+  checar();
+  setInterval(checar, 30 * 60 * 1000);
+}
+
+async function perguntar(versao, reiniciar) {
+  if (pronta) return;
+  pronta = true;
+  const { response } = await dialog.showMessageBox(janela, {
+    message: `Telão ${versao.replace(/^v/, '')} pronto`,
+    detail: 'Reinicie para usar a versão nova (leva poucos segundos). Se preferir, ela entra sozinha quando você fechar o app.',
+    buttons: ['Reiniciar agora', 'Depois'],
+  });
+  if (response === 0) reiniciar();
+}
+
+async function atualizarMac() {
+  const ultima = await fetch('https://api.github.com/repos/telao-app/telao-app-desktop/releases/latest').then((r) => r.json());
   const partes = (v) => String(v).replace(/^v/, '').split(/[.-]/).slice(0, 3).map(Number);
-  const [a, b] = [partes(ultima?.tag_name), partes(app.getVersion())];
+  const [a, b] = [partes(ultima.tag_name), partes(app.getVersion())];
   const nova = a.findIndex((n, i) => n !== b[i]);
   if (nova < 0 || !(a[nova] > b[nova])) return;
-  const { response } = await dialog.showMessageBox({ message: `Versão nova do Telão: ${ultima.tag_name}`, buttons: ['Baixar', 'Depois'] });
-  if (response === 0) shell.openExternal('https://github.com/telao-app/telao-app-desktop/releases/latest/download/Telao-mac.dmg');
+  const zip = ultima.assets?.find((x) => x.name === 'Telao-mac.zip');
+  const atual = path.resolve(process.execPath, '../../..'); // .../Telao.app
+  try {
+    fs.accessSync(path.dirname(atual), fs.constants.W_OK); // aberto do dmg ou de pasta sem permissão: não dá para trocar
+    if (!zip) throw new Error('release sem zip');
+  } catch {
+    pronta = true;
+    const { response } = await dialog.showMessageBox(janela, { message: `Versão nova do Telão: ${ultima.tag_name}`, buttons: ['Baixar', 'Depois'] });
+    if (response === 0) shell.openExternal('https://github.com/telao-app/telao-app-desktop/releases/latest/download/Telao-mac.dmg');
+    return;
+  }
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'telao-'));
+  const arquivo = path.join(dir, 'Telao.zip');
+  fs.writeFileSync(arquivo, Buffer.from(await (await fetch(zip.browser_download_url)).arrayBuffer()));
+  await new Promise((ok, erro) => execFile('ditto', ['-x', '-k', arquivo, dir], (e) => (e ? erro(e) : ok())));
+  // troca depois que este processo sai; o antigo vai para a pasta temporária (o sistema limpa) e volta se a troca falhar
+  let abrir = '0';
+  app.once('will-quit', () => spawn('/bin/sh', ['-c',
+    'while kill -0 "$0" 2>/dev/null; do sleep 0.2; done; mv "$1" "$2.velho" && { mv "$2" "$1" || mv "$2.velho" "$1"; }; [ "$3" = 1 ] && open "$1"',
+    String(process.pid), atual, path.join(dir, 'Telao.app'), abrir], { detached: true, stdio: 'ignore' }).unref());
+  perguntar(ultima.tag_name, () => { abrir = '1'; app.quit(); });
 }
 
 app.on('window-all-closed', () => app.quit());

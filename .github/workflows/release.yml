@@ -1,4 +1,4 @@
-# Push de tag v* (ex.: v0.1.0) gera os instaladores e publica uma release. Os links fixos
+# Push de tag v* (ex.: v0.1.0) gera os instaladores e publica uma release (o zip do Mac é o que o app baixa para se atualizar). Os links fixos
 # releases/latest/download/Telao-{mac.dmg,windows.exe,linux.AppImage} apontam sempre para a última.
 name: release
 
@@ -27,12 +27,27 @@ jobs:
         if: runner.os == 'Windows'
       - run: cl /nologo /EHsc /O2 /std:c++17 nativo\telao-som.cpp /Fe:build\telao-som.exe ole32.lib mmdevapi.lib user32.lib dwmapi.lib
         if: runner.os == 'Windows'
+      # Mac: certificado próprio (sem Apple), sempre o mesmo, para a permissão de tela sobreviver às atualizações
+      - name: certificado do Mac
+        if: runner.os == 'macOS'
+        env:
+          P12: ${{ secrets.MAC_CERT_P12 }}
+          SENHA: ${{ secrets.MAC_CERT_SENHA }}
+        run: |
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/telao.p12"
+          security create-keychain -p x telao.keychain
+          security list-keychains -d user -s telao.keychain login.keychain
+          security unlock-keychain -p x telao.keychain
+          security import "$RUNNER_TEMP/telao.p12" -k telao.keychain -P "$SENHA" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k x telao.keychain
+          echo "MAC_ASSINATURA=Telao" >> "$GITHUB_ENV"
       - run: npm run dist
       - uses: actions/upload-artifact@v4
         with:
           name: telao-${{ matrix.os }}
           path: |
             dist/*.dmg
+            dist/*.zip
             dist/*.exe
             dist/*.AppImage
       - uses: softprops/action-gh-release@v2
@@ -43,6 +58,7 @@ jobs:
           # latest*.yml e .blockmap: o atualizador automático lê daqui
           files: |
             dist/*.dmg
+            dist/*.zip
             dist/*.exe
             dist/*.AppImage
             dist/latest*.yml
