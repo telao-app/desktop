@@ -185,10 +185,11 @@ async function atualizarMac() {
   const arquivo = path.join(dir, 'Telao.zip');
   fs.writeFileSync(arquivo, Buffer.from(await (await fetch(zip.browser_download_url)).arrayBuffer()));
   await new Promise((ok, erro) => execFile('ditto', ['-x', '-k', arquivo, dir], (e) => (e ? erro(e) : ok())));
-  // troca depois que este processo sai; o antigo vai para a pasta temporária (o sistema limpa) e volta se a troca falhar
+  // troca depois que este processo sai. Só o Contents: a pasta Telao.app fica a mesma e o atalho do Dock continua
+  // apontando para ela. O Contents antigo vai para a pasta temporária (o sistema limpa) e volta se a troca falhar.
   let abrir = '0';
   app.once('will-quit', () => spawn('/bin/sh', ['-c',
-    'while kill -0 "$0" 2>/dev/null; do sleep 0.2; done; mv "$1" "$2.velho" && { mv "$2" "$1" || mv "$2.velho" "$1"; }; [ "$3" = 1 ] && open "$1"',
+    'while kill -0 "$0" 2>/dev/null; do sleep 0.2; done; mv "$1/Contents" "$2.velho" && { mv "$2/Contents" "$1/Contents" || mv "$2.velho" "$1/Contents"; }; [ "$3" = 1 ] && open "$1"',
     String(process.pid), atual, path.join(dir, 'Telao.app'), abrir], { detached: true, stdio: 'ignore' }).unref());
   perguntar(ultima.tag_name, () => { abrir = '1'; app.quit(); });
 }
