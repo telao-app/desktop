@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFile, spawn } = require('node:child_process');
-const { app, BrowserWindow, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, nativeImage, session, shell, systemPreferences } = require('electron');
+const { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, nativeImage, session, shell, systemPreferences } = require('electron');
 const { autoUpdater } = require('electron-updater');
 
 // ponytail: carrega o site; quando o front for empacotado aqui dentro, deixa de depender do servidor entregar o código
@@ -22,15 +22,7 @@ app.whenReady().then(async () => {
     return escolhida && { id: escolhida.id, janela: escolhida.id.startsWith('window:') };
   });
   ipcMain.on('som-janela', (e, id) => somDaJanela(e.sender, id));
-  // Atalhos da chamada que a pessoa escolheu no site: valem com o app em segundo plano.
-  // Só combinações com Ctrl/Alt/⌘ ou teclas F/numéricas: o site não pode roubar (nem espiar) teclas comuns.
-  ipcMain.on('atalhos', (e, lista) => {
-    globalShortcut.unregisterAll();
-    for (const c of lista.slice(0, 10)) {
-      if (!/(^|\+)(Ctrl|Alt|Meta)\+|(^|\+)(F\d+|num\d)$/.test(c)) continue;
-      try { globalShortcut.register(c, () => e.sender.send('atalho', c)); } catch {}
-    }
-  });
+  ipcMain.handle('teclas', (_e, t) => teclas(t));
 
   session.defaultSession.setDisplayMediaRequestHandler(async (req, callback) => {
     const escolha = escolhida ?? (await escolher());
@@ -74,6 +66,44 @@ function bolinha() {
     if (x * x + y * y <= 56) px.set([0x45, 0x42, 0xed, 0xff], i * 4); // BGRA, vermelho
   }
   return nativeImage.createFromBitmap(px, { width: t, height: t });
+}
+
+// Atalhos e apertar para falar escolhidos no site, com o app em segundo plano. O uiohook só escuta o teclado (como o
+// Discord): a tecla continua indo para o programa em uso. Responde se está escutando (senão o site cuida só com foco).
+// O site manda no máximo 10 atalhos + 1 tecla de falar: não dá para virar um leitor de tudo que se digita.
+let gancho = null, escolhidas = { atalhos: [], ptt: null };
+const apertadas = new Set();
+function teclas({ atalhos, ptt }) {
+  let ui;
+  try { ui = require('uiohook-napi'); } catch { return false; }
+  // KeyboardEvent.code ("KeyM", "Digit1", "ControlLeft") vira o nome do uiohook ("M", "1", "Ctrl")
+  const tecla = (code) => ui.UiohookKey[code.replace(/^(Key|Digit)/, '').replace(/^Control/, 'Ctrl').replace(/^(Ctrl|Alt|Shift|Meta)Left$/, '$1')];
+  escolhidas = {
+    atalhos: atalhos.slice(0, 10).map((c) => {
+      const p = c.split('+');
+      return { c, k: tecla(p.pop()), ctrl: p.includes('Ctrl'), alt: p.includes('Alt'), shift: p.includes('Shift'), meta: p.includes('Meta') };
+    }).filter((a) => a.k),
+    ptt: ptt && tecla(ptt),
+  };
+  if (gancho) return true;
+  if (!escolhidas.atalhos.length && !escolhidas.ptt) return false;
+  // Mac: precisa de Acessibilidade; a 1ª vez o sistema pede e só vale depois de reabrir o app
+  if (process.platform === 'darwin' && !systemPreferences.isTrustedAccessibilityClient(true)) return false;
+  gancho = ui.uIOhook;
+  gancho.on('keydown', (e) => {
+    if (apertadas.has(e.keycode)) return; // tecla segurada repete o keydown
+    apertadas.add(e.keycode);
+    if (e.keycode === escolhidas.ptt) janela.webContents.send('falar', true);
+    const a = escolhidas.atalhos.find((x) => x.k === e.keycode && x.ctrl === e.ctrlKey && x.alt === e.altKey && x.shift === e.shiftKey && x.meta === e.metaKey);
+    if (a) janela.webContents.send('atalho', a.c);
+  });
+  gancho.on('keyup', (e) => {
+    apertadas.delete(e.keycode);
+    if (e.keycode === escolhidas.ptt) janela.webContents.send('falar', false);
+  });
+  gancho.start();
+  app.on('will-quit', () => gancho.stop()); // sem isso o processo cai ao fechar
+  return true;
 }
 
 // Abre o seletor e devolve a fonte escolhida (null = cancelou ou sem permissão).

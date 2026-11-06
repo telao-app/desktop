@@ -58,10 +58,12 @@
       "owner": "telao-app",
       "repo": "telao-app-desktop"
     },
-    "afterSign": "assinar.js"
+    "afterSign": "assinar.js",
+    "npmRebuild": false
   },
   "repository": "github:telao-app/telao-app-desktop",
   "dependencies": {
-    "electron-updater": "^6.8.11"
+    "electron-updater": "^6.8.11",
+    "uiohook-napi": "^1.5.5"
   }
 }

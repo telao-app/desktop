@@ -3,12 +3,14 @@
 // e uma faixa de áudio montada com o PCM que o nativo/telao-som.exe captura do processo da janela.
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Atalhos globais da chamada (o site manda as combinações e recebe quando apertam)
+// Atalhos e apertar para falar com o app em segundo plano (o site manda as teclas e recebe quando apertam)
 contextBridge.exposeInMainWorld('telaoDesktop', {
-  atalhos: (lista, aoApertar) => {
+  teclas: (t, aoApertar, aoFalar) => {
     ipcRenderer.removeAllListeners('atalho');
+    ipcRenderer.removeAllListeners('falar');
     ipcRenderer.on('atalho', (_e, c) => aoApertar(c));
-    ipcRenderer.send('atalhos', lista);
+    ipcRenderer.on('falar', (_e, on) => aoFalar(on));
+    return ipcRenderer.invoke('teclas', t);
   },
 });
 
