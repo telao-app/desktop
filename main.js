@@ -36,6 +36,8 @@ app.whenReady().then(async () => {
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
   janela.loadURL(URL_TELAO);
+  // Não lidas no ícone (Dock, barra de tarefas): o site já põe "(n) Telão" no título
+  janela.webContents.on('page-title-updated', (_e, titulo) => contador(Number(titulo.match(/^\((\d+)\)/)?.[1] ?? 0)));
   // Ctrl+Shift+D (⌘⇧D no Mac): o que a minha tela está enviando e por que está limitada
   janela.webContents.on('before-input-event', (_e, t) => {
     if (t.type === 'keyDown' && (t.control || t.meta) && t.shift && t.key.toLowerCase() === 'd') diagnostico();
@@ -47,6 +49,20 @@ let janela;
 let escolhida = null;
 let captura = null;
 const nativo = path.join(process.resourcesPath, 'telao-som.exe');
+
+// Mac e Linux mostram o número; o Windows só aceita um ícone sobreposto, então vai uma bolinha vermelha
+function contador(n) {
+  if (process.platform !== 'win32') return app.setBadgeCount(n);
+  janela.setOverlayIcon(n ? bolinha() : null, n ? `${n} não lidas` : '');
+}
+function bolinha() {
+  const t = 16, px = Buffer.alloc(t * t * 4);
+  for (let i = 0; i < t * t; i++) {
+    const x = (i % t) - 7.5, y = Math.floor(i / t) - 7.5;
+    if (x * x + y * y <= 56) px.set([0x45, 0x42, 0xed, 0xff], i * 4); // BGRA, vermelho
+  }
+  return nativeImage.createFromBitmap(px, { width: t, height: t });
+}
 
 // Abre o seletor e devolve a fonte escolhida (null = cancelou ou sem permissão).
 async function escolher() {
