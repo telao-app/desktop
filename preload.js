@@ -3,6 +3,15 @@
 // e uma faixa de áudio montada com o PCM que o nativo/telao-som.exe captura do processo da janela.
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Atalhos globais da chamada (o site manda as combinações e recebe quando apertam)
+contextBridge.exposeInMainWorld('telaoDesktop', {
+  atalhos: (lista, aoApertar) => {
+    ipcRenderer.removeAllListeners('atalho');
+    ipcRenderer.on('atalho', (_e, c) => aoApertar(c));
+    ipcRenderer.send('atalhos', lista);
+  },
+});
+
 if (process.platform === 'win32') {
   const desktop = {
     escolher: () => ipcRenderer.invoke('escolher-fonte'),

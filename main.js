@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFile, spawn } = require('node:child_process');
-const { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, nativeImage, session, shell, systemPreferences } = require('electron');
+const { app, BrowserWindow, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, nativeImage, session, shell, systemPreferences } = require('electron');
 const { autoUpdater } = require('electron-updater');
 
 // ponytail: carrega o site; quando o front for empacotado aqui dentro, deixa de depender do servidor entregar o código
@@ -22,6 +22,15 @@ app.whenReady().then(async () => {
     return escolhida && { id: escolhida.id, janela: escolhida.id.startsWith('window:') };
   });
   ipcMain.on('som-janela', (e, id) => somDaJanela(e.sender, id));
+  // Atalhos da chamada que a pessoa escolheu no site: valem com o app em segundo plano.
+  // Só combinações com Ctrl/Alt/⌘ ou teclas F/numéricas: o site não pode roubar (nem espiar) teclas comuns.
+  ipcMain.on('atalhos', (e, lista) => {
+    globalShortcut.unregisterAll();
+    for (const c of lista.slice(0, 10)) {
+      if (!/(^|\+)(Ctrl|Alt|Meta)\+|(^|\+)(F\d+|num\d)$/.test(c)) continue;
+      try { globalShortcut.register(c, () => e.sender.send('atalho', c)); } catch {}
+    }
+  });
 
   session.defaultSession.setDisplayMediaRequestHandler(async (req, callback) => {
     const escolha = escolhida ?? (await escolher());
