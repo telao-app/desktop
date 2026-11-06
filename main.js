@@ -8,6 +8,9 @@ const { autoUpdater } = require('electron-updater');
 // ponytail: carrega o site; quando o front for empacotado aqui dentro, deixa de depender do servidor entregar o código
 const URL_TELAO = process.env.TELAO_URL || 'https://telao.nyxdev.com.br';
 
+// O site mostra a versão em "Sobre" lendo do user agent
+app.userAgentFallback += ` Telao/${app.getVersion()}`;
+
 app.whenReady().then(async () => {
   if (process.platform === 'darwin') {
     await systemPreferences.askForMediaAccess('microphone');
