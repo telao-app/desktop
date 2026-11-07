@@ -33,6 +33,7 @@
         eventos: canal((e) => (e.atalho ? aoApertar(e.atalho) : aoFalar(e.falar))),
       }),
     jogo: () => T.invoke("jogo"),
+    abrirComPc: (ligar) => T.invoke("abrir_com_pc", { ligar: ligar ?? null }),
     notificacoes: true, // o site liga as notificações uma vez nesta versão (antes no Mac elas nem existiam no app)
   };
 

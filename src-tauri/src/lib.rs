@@ -3,6 +3,8 @@
 // No Linux continua o Electron.
 
 #[cfg(desktop)]
+mod abrir;
+#[cfg(desktop)]
 mod atualizar;
 #[cfg(desktop)]
 mod jogo;
@@ -37,11 +39,12 @@ pub fn run() {
     .plugin(tauri_plugin_single_instance::init(|app, _, _| mostrar(app)))
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_notification::init())
+    .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec![abrir::ESCONDIDO])))
     .manage(notificacao::Estado::default())
     .plugin(tauri_plugin_clipboard_manager::init())
     .manage(teclas::Estado::default())
     .manage(som::Estado::default())
-    .invoke_handler(tauri::generate_handler![teclas::teclas, som::som, som::som_parar, jogo::jogo, notificacao::notificar, diagnostico]);
+    .invoke_handler(tauri::generate_handler![teclas::teclas, som::som, som::som_parar, jogo::jogo, notificacao::notificar, abrir::abrir_com_pc, diagnostico]);
   app
     .setup(|app| {
       let site: Url = std::env::var("TELAO_URL").unwrap_or_else(|_| URL_PADRAO.into()).parse()?;
@@ -57,6 +60,8 @@ pub fn run() {
       {
         let janela = WebviewWindowBuilder::new(app, "principal", WebviewUrl::External(site))
           .title("Telão")
+          // aberto junto com o computador: começa escondido, já conectado
+          .visible(!std::env::args().any(|a| a == abrir::ESCONDIDO))
           .inner_size(1280.0, 800.0)
           .background_color(tauri::window::Color(0x11, 0x12, 0x14, 0xff))
           .initialization_script(include_str!("ponte.js"))
@@ -93,6 +98,7 @@ pub fn run() {
         #[cfg(windows)]
         icone_bandeja(app)?;
         notificacao::iniciar(app.handle());
+        abrir::iniciar(app.handle());
         #[cfg(not(debug_assertions))]
         atualizar::iniciar(app.handle().clone());
         let _ = janela;
