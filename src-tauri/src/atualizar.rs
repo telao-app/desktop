@@ -5,6 +5,7 @@
                                                  // Windows: roda o instalador novo em silêncio quando o app fecha (e reabre, se pediu para reiniciar).
 use serde::Deserialize;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::AppHandle;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
@@ -36,12 +37,10 @@ static PENDENTE: Mutex<Option<Pendente>> = Mutex::new(None);
 
 pub fn iniciar(app: AppHandle) {
   tauri::async_runtime::spawn(async move {
+    // Segue procurando mesmo com uma versão baixada: saiu outra, troca por ela (ninguém instala uma por uma).
     loop {
-      if let Err(e) = checar(&app).await {
+      if let Err(e) = checar(&app, true).await {
         eprintln!("atualização: {e}");
-      }
-      if PENDENTE.lock().unwrap().is_some() {
-        return;
       }
       tokio::time::sleep(std::time::Duration::from_secs(30 * 60)).await;
     }
@@ -52,10 +51,25 @@ fn partes(v: &str) -> Vec<u64> {
   v.trim_start_matches('v').split(['.', '-']).take(3).map(|n| n.parse().unwrap_or(0)).collect()
 }
 
-async fn checar(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+// Uma procura por vez (a do relógio e a do "Sobre" podiam baixar o mesmo arquivo juntas).
+static PROCURANDO: AtomicBool = AtomicBool::new(false);
+
+/// `avisar`: abre o aviso "Reiniciar agora" (o "Sobre" do site mostra o dele).
+async fn checar(app: &AppHandle, avisar: bool) -> Result<(), Box<dyn std::error::Error>> {
+  if PROCURANDO.swap(true, Ordering::SeqCst) {
+    return Ok(());
+  }
+  let r = procurar(app, avisar).await;
+  PROCURANDO.store(false, Ordering::SeqCst);
+  r
+}
+
+async fn procurar(app: &AppHandle, avisar: bool) -> Result<(), Box<dyn std::error::Error>> {
   let cliente = reqwest::Client::builder().user_agent(format!("Telao/{}", app.package_info().version)).build()?;
   let ultima: Release = cliente.get(RELEASES).send().await?.error_for_status()?.json().await?;
-  if partes(&ultima.tag_name) <= partes(&app.package_info().version.to_string()) {
+  // compara com a já baixada, se houver: só baixa de novo quando saiu uma mais nova que ela
+  let tenho = PENDENTE.lock().unwrap().as_ref().map(|p| p.versao.clone()).unwrap_or_else(|| app.package_info().version.to_string());
+  if partes(&ultima.tag_name) <= partes(&tenho) {
     return Ok(());
   }
   let asset = ultima.assets.iter().find(|a| a.name == ARQUIVO).ok_or("release sem o instalador")?;
@@ -87,7 +101,9 @@ async fn checar(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
   #[cfg(windows)]
   let novo = arquivo;
   *PENDENTE.lock().unwrap() = Some(Pendente { novo, reabrir: false, versao: ultima.tag_name.clone() });
-  perguntar(app, &ultima.tag_name);
+  if avisar {
+    perguntar(app, &ultima.tag_name);
+  }
   Ok(())
 }
 
@@ -113,14 +129,26 @@ fn reiniciar(app: &AppHandle) {
 }
 
 // "Sobre" do site: a versão já baixada e pronta para instalar (sem nenhuma, null) e o mesmo "Reiniciar agora" do aviso.
-#[tauri::command(async)]
-pub fn atualizacao() -> Option<String> {
+// Abrir o "Sobre" procura na hora: oferece a mais nova, não só a que foi baixada há meia hora. Espera no máximo 3 s
+// (baixar pode demorar); a procura segue e a versão fica pronta para o próximo "Sobre" ou ao fechar o app.
+#[tauri::command]
+pub async fn atualizacao(app: AppHandle) -> Result<Option<String>, ()> {
+  if !cfg!(debug_assertions) {
+    let procura = tauri::async_runtime::spawn(async move {
+      let _ = checar(&app, false).await;
+    });
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(3), procura).await;
+  }
+  Ok(pronta())
+}
+
+fn pronta() -> Option<String> {
   PENDENTE.lock().unwrap().as_ref().filter(|p| !p.novo.as_os_str().is_empty()).map(|p| p.versao.trim_start_matches('v').to_string())
 }
 
 #[tauri::command(async)]
 pub fn atualizar(app: AppHandle) {
-  if atualizacao().is_some() {
+  if pronta().is_some() {
     reiniciar(&app);
   }
 }
