@@ -30,9 +30,7 @@ fn main() {
     .setup(|app| {
       let site: Url = std::env::var("TELAO_URL").unwrap_or_else(|_| URL_PADRAO.into()).parse()?;
       let origem = site.origin();
-      // Windows: o user agent só dá para mudar com o WebView2 criado; abre em branco, ajusta e então vai ao site
-      let inicio = if cfg!(windows) { "about:blank".parse()? } else { site.clone() };
-      let janela = WebviewWindowBuilder::new(app, "principal", WebviewUrl::External(inicio))
+      let janela = WebviewWindowBuilder::new(app, "principal", WebviewUrl::External(site))
         .title("Telão")
         .inner_size(1280.0, 800.0)
         .background_color(tauri::window::Color(0x11, 0x12, 0x14, 0xff))
@@ -43,16 +41,16 @@ fn main() {
           contador(&janela, &titulo);
         })
         // fora do site (link de vídeo, documento): abre no navegador do sistema, nunca dentro do app
-        .on_navigation(move |url| url.scheme() == "about" || url.origin() == origem || fora(url))
+        .on_navigation(move |url| url.origin() == origem || fora(url))
         .on_new_window(|url, _| {
           fora(&url);
           NewWindowResponse::Deny
         });
       #[cfg(target_os = "macos")]
       let janela = janela.user_agent(&format!("{UA_MAC} Telao/{}", app.package_info().version));
-      let janela = janela.build()?;
       #[cfg(windows)]
-      user_agent_windows(&janela, app.package_info().version.to_string(), site);
+      let janela = janela.user_agent(&ua_windows(&app.package_info().version.to_string()));
+      let janela = janela.build()?;
       #[cfg(not(debug_assertions))]
       atualizar::iniciar(app.handle().clone());
       let _ = janela;
@@ -97,25 +95,13 @@ fn bolinha() -> tauri::image::Image<'static> {
   tauri::image::Image::new_owned(px, T as u32, T as u32)
 }
 
+// WebView2 é o Edge: o user agent dele + "Telao/<versão>", já no builder (antes era em branco, troca e navega, e a
+// janela ficava preta no Windows)
 #[cfg(windows)]
-fn user_agent_windows(janela: &WebviewWindow, versao: String, site: Url) {
-  use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings2;
-  use windows::core::{Interface, HSTRING, PWSTR};
-  let navegar = janela.clone();
-  let _ = janela.with_webview(move |w| unsafe {
-    let ajustar = || -> windows::core::Result<()> {
-      let ajustes: ICoreWebView2Settings2 = w.controller().CoreWebView2()?.Settings()?.cast()?;
-      let mut ua = PWSTR::null();
-      ajustes.UserAgent(&mut ua)?;
-      let atual = ua.to_string().unwrap_or_default();
-      windows::Win32::System::Com::CoTaskMemFree(Some(ua.0 as _));
-      ajustes.SetUserAgent(&HSTRING::from(format!("{atual} Telao/{versao}")))
-    };
-    if let Err(e) = ajustar() {
-      eprintln!("user agent: {e}");
-    }
-    let _ = navegar.navigate(site);
-  });
+fn ua_windows(versao: &str) -> String {
+  let edge = tauri::webview_version().unwrap_or_else(|_| "130.0.0.0".into());
+  let maior = edge.split('.').next().unwrap_or("130");
+  format!("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{maior}.0.0.0 Safari/537.36 Edg/{edge} Telao/{versao}")
 }
 
 // Ctrl+Shift+D (⌘⇧D no Mac): o que a minha tela está enviando e por que está limitada
