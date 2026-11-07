@@ -2,7 +2,7 @@
                                                  // Baixa a versão nova em segundo plano e pergunta se reinicia agora; "Depois" instala ao fechar o app.
                                                  // Mac: troca só o Contents do próprio Telao.app (a pasta fica a mesma e o atalho do Dock continua valendo). Sem o
                                                  // atualizador do Tauri de propósito: o Electron instalado hoje baixa o mesmo Telao-mac.zip e vira este app sozinho.
-                                                 // Windows: roda o instalador novo em silêncio depois que o app fecha (e reabre, se pediu para reiniciar).
+                                                 // Windows: roda o instalador novo em silêncio quando o app fecha (e reabre, se pediu para reiniciar).
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -132,10 +132,10 @@ pub fn ao_sair() {
   if p.novo.as_os_str().is_empty() {
     return;
   }
-  let pid = std::process::id().to_string();
-  let reabrir = if p.reabrir { "1" } else { "0" };
   #[cfg(target_os = "macos")]
   {
+    let pid = std::process::id().to_string();
+    let reabrir = if p.reabrir { "1" } else { "0" };
     use std::os::unix::process::CommandExt;
     let Some(atual) = app_atual() else { return };
     // O Contents antigo vai para a pasta temporária (o sistema limpa) e volta se a troca falhar.
@@ -153,16 +153,14 @@ pub fn ao_sair() {
   }
   #[cfg(windows)]
   {
+    // O próprio instalador espera o app fechar (fecha o que sobrar) e, com --updated, reabre no fim (migrar-electron.nsh).
+    // Antes ia por um PowerShell escondido, que o antivírus do Windows barra: o app só fechava e não atualizava.
     use std::os::windows::process::CommandExt;
-    let Ok(exe) = std::env::current_exe() else { return };
-    let script = format!(
-      "Wait-Process -Id {pid} -ErrorAction SilentlyContinue; Start-Process -Wait -FilePath '{}' -ArgumentList '/S'; if ('{reabrir}' -eq '1') {{ Start-Process -FilePath '{}' }}",
-      p.novo.display().to_string().replace('\'', "''"),
-      exe.display().to_string().replace('\'', "''")
-    );
-    let _ = std::process::Command::new("powershell")
-      .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
-      .creation_flags(0x0000_0008 | 0x0800_0000) // DETACHED_PROCESS | CREATE_NO_WINDOW
-      .spawn();
+    let mut instalar = std::process::Command::new(&p.novo);
+    instalar.arg("/S");
+    if p.reabrir {
+      instalar.arg("--updated");
+    }
+    let _ = instalar.creation_flags(0x0000_0008).spawn(); // DETACHED_PROCESS: segue depois que o app sai
   }
 }
