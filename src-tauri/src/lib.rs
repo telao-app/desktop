@@ -12,7 +12,7 @@ mod som;
 mod teclas;
 
 #[cfg(desktop)]
-use tauri::{webview::NewWindowResponse, AppHandle, Manager, WebviewWindow};
+use tauri::{webview::{NewWindowResponse, PermissionKind, PermissionResponse}, AppHandle, Manager, WebviewWindow};
 use tauri::{Url, WebviewUrl, WebviewWindowBuilder};
 #[cfg(desktop)]
 use tauri_plugin_clipboard_manager::ClipboardExt;
@@ -64,6 +64,12 @@ pub fn run() {
           .on_new_window(|url, _| {
             fora(&url);
             NewWindowResponse::Deny
+          })
+          // A janela só abre o site do Telão: microfone e câmera liberados sem o aviso do WebView2, que, uma vez
+          // recusado, fica gravado e nunca mais pergunta (a voz não funciona e reinstalar não limpa)
+          .on_permission_request(|_, tipo| match tipo {
+            PermissionKind::Microphone | PermissionKind::Camera => PermissionResponse::Allow,
+            _ => PermissionResponse::Default,
           });
         #[cfg(target_os = "macos")]
         let janela = janela.user_agent(&format!("{UA_MAC} Telao/{}", app.package_info().version));
