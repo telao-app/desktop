@@ -1,6 +1,7 @@
-# Push de tag v* (ex.: v0.2.0) gera os instaladores e publica uma release. Mac e Windows saem do Tauri (src-tauri),
-# o Linux continua no Electron. Os links fixos releases/latest/download/Telao-{mac.dmg,windows.exe,linux.AppImage}
-# apontam sempre para a última; o Telao-mac.zip é o que o app do Mac baixa para se atualizar (o Tauri e o Electron 0.1.x).
+# Push de tag v* (ex.: v0.2.0) gera os instaladores e publica uma release. Mac, Windows e Android saem do Tauri
+# (src-tauri), o Linux continua no Electron. Os links fixos releases/latest/download/Telao-{mac.dmg,windows.exe,
+# linux.AppImage,android.apk} apontam sempre para a última; o Telao-mac.zip é o que o app do Mac baixa para se atualizar.
+# iOS: só compila para o simulador (sem conta da Apple não há .ipa instalável) e fica como artefato do workflow.
 name: release
 
 on:
@@ -111,3 +112,73 @@ jobs:
             dist/*.AppImage
             dist/latest*.yml
             dist/*.blockmap
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools # o padrão inclui "tools", que o sdkmanager atual não tem mais
+      - run: sdkmanager "ndk;27.1.12297006"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      # APK assinado com a keystore do Telão (backup fora do repo; perder = não dá para atualizar o app instalado)
+      - name: keystore
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          SENHA: ${{ secrets.ANDROID_KEYSTORE_SENHA }}
+          ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          echo "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/telao.jks"
+          printf 'keyAlias=%s\npassword=%s\nstoreFile=%s\n' "$ALIAS" "$SENHA" "$RUNNER_TEMP/telao.jks" > src-tauri/gen/android/keystore.properties
+      - run: |
+          export NDK_HOME="$ANDROID_HOME/ndk/27.1.12297006"
+          npx tauri android build --apk
+          mkdir -p dist
+          cp src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk dist/Telao-android.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: telao-android
+          path: dist/Telao-android.apk
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: dist/Telao-android.apk
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: brew install xcodegen
+      - run: |
+          npx tauri ios build --target aarch64-sim --ci
+          mkdir -p dist
+          ditto -c -k --keepParent src-tauri/gen/apple/build/arm64-sim/Telao.app dist/Telao-ios-simulador.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: telao-ios-simulador
+          path: dist/Telao-ios-simulador.zip

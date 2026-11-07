@@ -5,7 +5,7 @@
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashSet;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{mpsc, Mutex, OnceLock};
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State};
 
@@ -34,9 +34,18 @@ struct Interno {
 }
 
 static APP: OnceLock<AppHandle> = OnceLock::new();
+// O gancho do sistema roda a cada tecla de qualquer programa e precisa voltar na hora (senão o teclado do computador
+// todo engasga): ele só enfileira, e uma thread nossa trata.
+static FILA: OnceLock<mpsc::Sender<(u32, bool)>> = OnceLock::new();
 
+// async: fora da thread principal (no Windows, comando síncrono que espera algo trava a janela: "Não respondendo")
 #[tauri::command]
-pub fn teclas(app: AppHandle, estado: State<Estado>, escolhidas: Escolhidas, eventos: Channel<Value>) -> bool {
+pub async fn teclas(
+  app: AppHandle,
+  estado: State<'_, Estado>,
+  escolhidas: Escolhidas,
+  eventos: Channel<Value>,
+) -> Result<bool, String> {
   let mut s = estado.0.lock().unwrap();
   s.canal = Some(eventos);
   s.atalhos = escolhidas
@@ -52,17 +61,28 @@ pub fn teclas(app: AppHandle, estado: State<Estado>, escolhidas: Escolhidas, eve
     .collect();
   s.ptt = escolhidas.ptt.as_deref().and_then(plataforma::codigo);
   if s.escutando {
-    return true;
+    return Ok(true);
   }
   if s.atalhos.is_empty() && s.ptt.is_none() {
-    return false;
+    return Ok(false);
   }
   let _ = APP.set(app);
+  FILA.get_or_init(|| {
+    let (envia, recebe) = mpsc::channel();
+    std::thread::spawn(move || recebe.into_iter().for_each(|(codigo, desceu)| tecla(codigo, desceu)));
+    envia
+  });
   s.escutando = plataforma::escutar();
-  s.escutando
+  Ok(s.escutando)
 }
 
-// Chamado pelo gancho do sistema a cada tecla (de qualquer programa).
+// Chamado pelo gancho do sistema a cada tecla (de qualquer programa): só enfileira.
+fn chegou(codigo: u32, desceu: bool) {
+  if let Some(f) = FILA.get() {
+    let _ = f.send((codigo, desceu));
+  }
+}
+
 fn tecla(codigo: u32, desceu: bool) {
   let Some(app) = APP.get() else { return };
   let estado = app.state::<Estado>();
@@ -271,11 +291,11 @@ mod plataforma {
             CGEventTapEnable(t.0, true);
           }
         }
-        10 | 11 => super::tecla(CGEventGetIntegerValueField(evento, 9) as u32, tipo == 10),
+        10 | 11 => super::chegou(CGEventGetIntegerValueField(evento, 9) as u32, tipo == 10),
         12 => {
           let k = CGEventGetIntegerValueField(evento, 9) as u32;
           if let Some((_, bit)) = LADOS.iter().find(|(c, _)| *c == k) {
-            super::tecla(k, CGEventGetFlags(evento) & bit != 0);
+            super::chegou(k, CGEventGetFlags(evento) & bit != 0);
           }
         }
         _ => {}
@@ -323,7 +343,8 @@ mod plataforma {
 
 #[cfg(windows)]
 mod plataforma {
-  use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
+  use windows::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM};
+  use windows::Win32::System::LibraryLoader::GetModuleHandleW;
   use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, GetMessageW, SetWindowsHookExW, KBDLLHOOKSTRUCT, LLKHF_EXTENDED, MSG, WH_KEYBOARD_LL, WM_KEYDOWN,
     WM_SYSKEYDOWN,
@@ -417,7 +438,7 @@ mod plataforma {
       // o Shift direito vem marcado como estendido, mas o scan code dele já é único
       let estendida = k.flags.contains(LLKHF_EXTENDED) && k.scanCode != 0x36;
       let codigo = k.scanCode | if estendida { 0xE000 } else { 0 };
-      super::tecla(codigo, matches!(w.0 as u32, WM_KEYDOWN | WM_SYSKEYDOWN));
+      super::chegou(codigo, matches!(w.0 as u32, WM_KEYDOWN | WM_SYSKEYDOWN));
     }
     CallNextHookEx(None, n, w, l)
   }
@@ -426,7 +447,8 @@ mod plataforma {
     let (pronto, ok) = std::sync::mpsc::channel();
     // o gancho vale para a thread que o instalou, que precisa ficar tratando mensagens
     std::thread::spawn(move || unsafe {
-      let gancho = SetWindowsHookExW(WH_KEYBOARD_LL, Some(recebe), None, 0);
+      let modulo = GetModuleHandleW(None).ok().map(|m| HINSTANCE(m.0));
+      let gancho = SetWindowsHookExW(WH_KEYBOARD_LL, Some(recebe), modulo, 0);
       let _ = pronto.send(gancho.is_ok());
       if gancho.is_err() {
         return;

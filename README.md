@@ -4,6 +4,8 @@ App desktop do Telão: uma janela que carrega `https://telao.nyxdev.com.br` e ac
 
 - **Mac e Windows: Tauri** ([src-tauri](src-tauri)), com o webview do sistema (WebKit no Mac, WebView2 no Windows).
 - **Linux: Electron** ([main.js](main.js)): no Linux o webview do sistema (WebKitGTK) não tem WebRTC confiável para a voz.
+- **Android e iOS: Tauri** (o mesmo [src-tauri](src-tauri), projetos em `src-tauri/gen`): só o site, com os links de fora
+  abrindo no navegador do sistema. Os recursos abaixo são do desktop.
 
 O que o app acrescenta:
 
@@ -26,6 +28,10 @@ transmitindo a tela inteira.
 - Mac (Apple Silicon): https://github.com/telao-app/telao-app-desktop/releases/latest/download/Telao-mac.dmg
 - Windows: https://github.com/telao-app/telao-app-desktop/releases/latest/download/Telao-windows.exe
 - Linux: https://github.com/telao-app/telao-app-desktop/releases/latest/download/Telao-linux.AppImage
+- Android: https://github.com/telao-app/telao-app-desktop/releases/latest/download/Telao-android.apk (permitir
+  "instalar apps desconhecidos" para o navegador na primeira vez)
+- iOS: ainda não. Sem conta de desenvolvedor da Apple não há `.ipa` instalável; o CI só compila para o simulador
+  (artefato `telao-ios-simulador` do workflow)
 
 O app não é assinado pela Apple nem pela Microsoft. No Mac, depois de arrastar para Aplicativos, rode uma vez
 `xattr -cr /Applications/Telao.app`; no Windows, em "O Windows protegeu o computador", clique em
@@ -38,6 +44,20 @@ Mac e Windows (precisa de Rust):
 ```bash
 npm install && npm run start:tauri                          # abre o site de produção
 TELAO_URL=http://localhost:5173 npm run start:tauri         # abre o web local
+```
+
+Android (precisa de JDK 17, Android SDK e NDK; `NDK_HOME` apontando para o NDK):
+
+```bash
+npx tauri android dev                                       # emulador ou aparelho conectado
+npx tauri android build --apk                               # sem keystore.properties sai sem assinatura
+```
+
+iOS (simulador):
+
+```bash
+npx tauri ios dev
+npx tauri ios build --target aarch64-sim
 ```
 
 Linux (Electron):
@@ -62,9 +82,16 @@ Sistema". Rodando pelo terminal, a permissão vai para o terminal; para testar, 
 npm version patch && git push --follow-tags
 ```
 
-O GitHub Actions ([release.yml](.github/workflows/release.yml)) gera `.dmg` e `.zip` (Mac), `.exe` (Windows) e
-`.AppImage` (Linux) e publica a release. A versão vem do `package.json` para os dois. O nome interno é `Telao`
+O GitHub Actions ([release.yml](.github/workflows/release.yml)) gera `.dmg` e `.zip` (Mac), `.exe` (Windows),
+`.AppImage` (Linux) e `.apk` (Android) e publica a release. A versão vem do `package.json` para todos. O nome interno é `Telao`
 (sem acento); o nome que aparece no Mac é "Telão".
+
+### Assinatura do Android
+
+O APK é assinado com a keystore do Telão (`app.telao`). Ela fica nos secrets do repo (`ANDROID_KEYSTORE` em base64,
+`ANDROID_KEYSTORE_SENHA`, `ANDROID_KEY_ALIAS`) e tem backup fora do repo. **Perder a keystore = não dá mais para
+atualizar o app de quem já instalou.** Para assinar localmente, crie `src-tauri/gen/android/keystore.properties`
+(fora do git) com `keyAlias`, `password` e `storeFile`.
 
 ### Quem tinha o app Electron (0.1.x) no Mac ou no Windows
 

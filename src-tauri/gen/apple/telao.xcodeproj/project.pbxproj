@@ -1,0 +1,349 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		22BA373EA41E35D13719D568 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C426244D5EE9D84162C0EF07 /* WebKit.framework */; };
+		2F724F94CF6E91C07F074DE9 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = F6F4BD4B737DCD0C8391A672 /* LaunchScreen.storyboard */; };
+		3A23949439BF7C6EC304A1B9 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6030F60408D642EF6D2C8238 /* Metal.framework */; };
+		3B19293B374450C553EAD2DA /* assets in Resources */ = {isa = PBXBuildFile; fileRef = AE66976F7FD2DCFA3BE7F836 /* assets */; };
+		505F3A8AED8963F62E48B2FA /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6FE989F8052A6F45BCA61A6E /* UIKit.framework */; };
+		56E6D76F9FC023DBC59B8C2D /* libapp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = C32BDE3F1019A3C1DC1CB8B0 /* libapp.a */; };
+		8BE61DAEE2AA5946EEC69B99 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1BFABB776B55A865DBCE3422 /* Security.framework */; };
+		B0A65F138517DECC92592C28 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 233FCAEDF6E1256C977E5566 /* Assets.xcassets */; };
+		BD8AEF144DB7FB35A6D9C46F /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 194C105D4CC8B391AAD0F1E6 /* QuartzCore.framework */; };
+		D03DE58C87BE5FED3AD3976D /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AD4CF01027EF529641EAB8C0 /* MetalKit.framework */; };
+		E6CD02C9D510D8E8730D2067 /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = DA6FBA67E2F0BF718EEDB670 /* main.mm */; };
+		FF94A5F1E6722A400E42D414 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7840DEAF66E682E2BAABFDD /* CoreGraphics.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		194C105D4CC8B391AAD0F1E6 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		1BFABB776B55A865DBCE3422 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		233FCAEDF6E1256C977E5566 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		23FA1738E4D7AC6C02C590E3 /* teclas.rs */ = {isa = PBXFileReference; path = teclas.rs; sourceTree = "<group>"; };
+		2B29B4C1B5B4E2AA00CA5474 /* telao_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = telao_iOS.entitlements; sourceTree = "<group>"; };
+		4133F95A0DDDA9F97741FBFC /* main.rs */ = {isa = PBXFileReference; path = main.rs; sourceTree = "<group>"; };
+		53204608475BD1FC4938648A /* telao_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = telao_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		56AABED583AF2DCF7AE72EE5 /* ponte.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = ponte.js; sourceTree = "<group>"; };
+		6030F60408D642EF6D2C8238 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+		6FE989F8052A6F45BCA61A6E /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
+		9D45964FFA378EE4314786DE /* atualizar.rs */ = {isa = PBXFileReference; path = atualizar.rs; sourceTree = "<group>"; };
+		A6229957924630812C5B007B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		AD4CF01027EF529641EAB8C0 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
+		AE66976F7FD2DCFA3BE7F836 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
+		B7840DEAF66E682E2BAABFDD /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		BB7E6A73B9C191CF36406360 /* lib.rs */ = {isa = PBXFileReference; path = lib.rs; sourceTree = "<group>"; };
+		BF0C50A3ADA06FA1EB65826D /* som.rs */ = {isa = PBXFileReference; path = som.rs; sourceTree = "<group>"; };
+		C32BDE3F1019A3C1DC1CB8B0 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
+		C426244D5EE9D84162C0EF07 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		D7CF992CA12D9556621151F7 /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
+		DA6FBA67E2F0BF718EEDB670 /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
+		F6F4BD4B737DCD0C8391A672 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		72E078869D3A0E8EA4562C8E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				56E6D76F9FC023DBC59B8C2D /* libapp.a in Frameworks */,
+				FF94A5F1E6722A400E42D414 /* CoreGraphics.framework in Frameworks */,
+				3A23949439BF7C6EC304A1B9 /* Metal.framework in Frameworks */,
+				D03DE58C87BE5FED3AD3976D /* MetalKit.framework in Frameworks */,
+				BD8AEF144DB7FB35A6D9C46F /* QuartzCore.framework in Frameworks */,
+				8BE61DAEE2AA5946EEC69B99 /* Security.framework in Frameworks */,
+				505F3A8AED8963F62E48B2FA /* UIKit.framework in Frameworks */,
+				22BA373EA41E35D13719D568 /* WebKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1BB15A489A5A46DD4B264F3B /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				B7840DEAF66E682E2BAABFDD /* CoreGraphics.framework */,
+				C32BDE3F1019A3C1DC1CB8B0 /* libapp.a */,
+				6030F60408D642EF6D2C8238 /* Metal.framework */,
+				AD4CF01027EF529641EAB8C0 /* MetalKit.framework */,
+				194C105D4CC8B391AAD0F1E6 /* QuartzCore.framework */,
+				1BFABB776B55A865DBCE3422 /* Security.framework */,
+				6FE989F8052A6F45BCA61A6E /* UIKit.framework */,
+				C426244D5EE9D84162C0EF07 /* WebKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		684009FFAD44E928B938DF38 = {
+			isa = PBXGroup;
+			children = (
+				AE66976F7FD2DCFA3BE7F836 /* assets */,
+				233FCAEDF6E1256C977E5566 /* Assets.xcassets */,
+				F6F4BD4B737DCD0C8391A672 /* LaunchScreen.storyboard */,
+				B18EEFA1618A565BEAB4EF4B /* Externals */,
+				743EC9C569329BCC5770F0C0 /* Sources */,
+				9067B320B6F555BE11191212 /* src */,
+				AD915F78F5241AD104A59146 /* telao_iOS */,
+				1BB15A489A5A46DD4B264F3B /* Frameworks */,
+				FAE392A4592B06B834843952 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		698E0868DD5190CAEBED39D7 /* bindings */ = {
+			isa = PBXGroup;
+			children = (
+				D7CF992CA12D9556621151F7 /* bindings.h */,
+			);
+			path = bindings;
+			sourceTree = "<group>";
+		};
+		743EC9C569329BCC5770F0C0 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				E3CF68BD8123EB526F7391C2 /* telao */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		9067B320B6F555BE11191212 /* src */ = {
+			isa = PBXGroup;
+			children = (
+				9D45964FFA378EE4314786DE /* atualizar.rs */,
+				BB7E6A73B9C191CF36406360 /* lib.rs */,
+				4133F95A0DDDA9F97741FBFC /* main.rs */,
+				56AABED583AF2DCF7AE72EE5 /* ponte.js */,
+				BF0C50A3ADA06FA1EB65826D /* som.rs */,
+				23FA1738E4D7AC6C02C590E3 /* teclas.rs */,
+			);
+			name = src;
+			path = ../../src;
+			sourceTree = "<group>";
+		};
+		AD915F78F5241AD104A59146 /* telao_iOS */ = {
+			isa = PBXGroup;
+			children = (
+				A6229957924630812C5B007B /* Info.plist */,
+				2B29B4C1B5B4E2AA00CA5474 /* telao_iOS.entitlements */,
+			);
+			path = telao_iOS;
+			sourceTree = "<group>";
+		};
+		B18EEFA1618A565BEAB4EF4B /* Externals */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Externals;
+			sourceTree = "<group>";
+		};
+		E3CF68BD8123EB526F7391C2 /* telao */ = {
+			isa = PBXGroup;
+			children = (
+				DA6FBA67E2F0BF718EEDB670 /* main.mm */,
+				698E0868DD5190CAEBED39D7 /* bindings */,
+			);
+			path = telao;
+			sourceTree = "<group>";
+		};
+		FAE392A4592B06B834843952 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				53204608475BD1FC4938648A /* telao_iOS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		727E9D799ECFF152EBBF3B83 /* telao_iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 679EF6F893AAD202F593F4AD /* Build configuration list for PBXNativeTarget "telao_iOS" */;
+			buildPhases = (
+				F10BD9C166E26CDB3F8F18A5 /* Build Rust Code */,
+				9F56297C4C570EAC7DBE1E94 /* Sources */,
+				AE991D663B79423353BE767C /* Resources */,
+				72E078869D3A0E8EA4562C8E /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = telao_iOS;
+			packageProductDependencies = (
+			);
+			productName = telao_iOS;
+			productReference = 53204608475BD1FC4938648A /* telao_iOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		CB60D586487728A1346798A6 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 47BAD1D2F16F5556CA03011D /* Build configuration list for PBXProject "telao" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 684009FFAD44E928B938DF38;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = FAE392A4592B06B834843952 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				727E9D799ECFF152EBBF3B83 /* telao_iOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AE991D663B79423353BE767C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B0A65F138517DECC92592C28 /* Assets.xcassets in Resources */,
+				2F724F94CF6E91C07F074DE9 /* LaunchScreen.storyboard in Resources */,
+				3B19293B374450C553EAD2DA /* assets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		F10BD9C166E26CDB3F8F18A5 /* Build Rust Code */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build Rust Code";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a",
+				"$(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "npm run -- tauri ios xcode-script -v --platform \"${PLATFORM_DISPLAY_NAME:?}\" --sdk-root \"${SDKROOT:?}\" --framework-search-paths \"${FRAMEWORK_SEARCH_PATHS:?}\" --header-search-paths \"${HEADER_SEARCH_PATHS:?}\" --gcc-preprocessor-definitions \"${GCC_PREPROCESSOR_DEFINITIONS:-}\" --configuration \"${CONFIGURATION:?}\" ${FORCE_COLOR} ${ARCHS:?}\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		9F56297C4C570EAC7DBE1E94 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E6CD02C9D510D8E8730D2067 /* main.mm in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		0B73682EE71EFCF393A2CE6E /* debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				SDKROOT = iphoneos;
+			};
+			name = debug;
+		};
+		45E5FBB61391BCE9402462E9 /* release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ARCHS = (
+					arm64,
+				);
+				CODE_SIGN_ENTITLEMENTS = telao_iOS/telao_iOS.entitlements;
+				ENABLE_BITCODE = NO;
+				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".\"",
+				);
+				INFOPLIST_FILE = telao_iOS/Info.plist;
+				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = app.telao;
+				PRODUCT_NAME = "Telao";
+				VALID_ARCHS = arm64;
+			};
+			name = release;
+		};
+		6A7EB0EF87CD382F6EC42B02 /* release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				SDKROOT = iphoneos;
+			};
+			name = release;
+		};
+		BECB10C0FBDEDCCA7912A76D /* debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ARCHS = (
+					arm64,
+				);
+				CODE_SIGN_ENTITLEMENTS = telao_iOS/telao_iOS.entitlements;
+				ENABLE_BITCODE = NO;
+				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".\"",
+				);
+				INFOPLIST_FILE = telao_iOS/Info.plist;
+				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = app.telao;
+				PRODUCT_NAME = "Telao";
+				VALID_ARCHS = arm64;
+			};
+			name = debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		47BAD1D2F16F5556CA03011D /* Build configuration list for PBXProject "telao" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0B73682EE71EFCF393A2CE6E /* debug */,
+				6A7EB0EF87CD382F6EC42B02 /* release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = debug;
+		};
+		679EF6F893AAD202F593F4AD /* Build configuration list for PBXNativeTarget "telao_iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BECB10C0FBDEDCCA7912A76D /* debug */,
+				45E5FBB61391BCE9402462E9 /* release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = CB60D586487728A1346798A6 /* Project object */;
+}

@@ -3,8 +3,17 @@
 // Só o nome sai daqui; a lista de programas abertos nunca vai para o site.
 use std::process::Command;
 
-const LOJAS: &[&str] = &["/steamapps/common/", "/epic games/", "/gog galaxy/games/", "/riot games/", "/ea games/", "/ubisoft game launcher/games/", "/xboxgames/"];
-const NAO_JOGOS: &[&str] = &["launcher", "epic online services", "directxredist", "riot client", "steamworks shared", "steam controller configs"];
+const LOJAS: &[&str] = &[
+  "/steamapps/common/",
+  "/epic games/",
+  "/gog galaxy/games/",
+  "/riot games/",
+  "/ea games/",
+  "/ubisoft game launcher/games/",
+  "/xboxgames/",
+];
+const NAO_JOGOS: &[&str] =
+  &["launcher", "epic online services", "directxredist", "riot client", "steamworks shared", "steam controller configs"];
 
 // async: o PowerShell leva ~1 s e não pode travar a janela
 #[tauri::command(async)]
@@ -45,7 +54,10 @@ mod testes {
   fn reconhece_pela_pasta_da_loja() {
     assert_eq!(nome(r"C:\Program Files (x86)\Steam\steamapps\common\Hades II\Hades2.exe").as_deref(), Some("Hades II"));
     assert_eq!(nome(r"D:\Epic Games\Fortnite\FortniteGame\Binaries\Win64\FortniteClient.exe").as_deref(), Some("Fortnite"));
-    assert_eq!(nome("/Users/a/Library/Application Support/Steam/steamapps/common/Celeste/Celeste.app/Contents/MacOS/Celeste").as_deref(), Some("Celeste"));
+    assert_eq!(
+      nome("/Users/a/Library/Application Support/Steam/steamapps/common/Celeste/Celeste.app/Contents/MacOS/Celeste").as_deref(),
+      Some("Celeste")
+    );
     assert_eq!(nome(r"C:\Program Files (x86)\Epic Games\Launcher\Portal\Binaries\Win64\EpicGamesLauncher.exe"), None);
     assert_eq!(nome(r"C:\Riot Games\Riot Client\RiotClientServices.exe"), None);
     assert_eq!(nome(r"C:\Windows\explorer.exe"), None);
