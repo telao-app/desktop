@@ -3,6 +3,7 @@
 // - getDisplayMedia: o vídeo vem do próprio webview (seletor do sistema); o som vem do nativo, como PCM int16
 //   estéreo 48 kHz: no Mac o som do computador sem o que o próprio Telão toca, no Windows o som só do programa
 //   da janela escolhida (tela inteira: o seletor do WebView2 já oferece o som do sistema).
+// - window.telaoDesktop.jogo: nome do jogo aberto ("Jogando X"), ou null.
 // - Ctrl+Shift+D (⌘⇧D no Mac): diagnóstico da transmissão.
 (() => {
   const T = window.__TAURI_INTERNALS__;
@@ -30,6 +31,7 @@
         escolhidas: t,
         eventos: canal((e) => (e.atalho ? aoApertar(e.atalho) : aoFalar(e.falar))),
       }),
+    jogo: () => T.invoke("jogo"),
   };
 
   // toca o PCM que chega do nativo; se acumular atraso, descarta o excesso
