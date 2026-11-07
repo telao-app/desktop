@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-som"
+description = "Enables the som command without any pre-configured scope."
+commands.allow = ["som"]
+
+[[permission]]
+identifier = "deny-som"
+description = "Denies the som command without any pre-configured scope."
+commands.deny = ["som"]

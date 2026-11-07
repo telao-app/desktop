@@ -1,5 +1,6 @@
-# Push de tag v* (ex.: v0.1.0) gera os instaladores e publica uma release (o zip do Mac é o que o app baixa para se atualizar). Os links fixos
-# releases/latest/download/Telao-{mac.dmg,windows.exe,linux.AppImage} apontam sempre para a última.
+# Push de tag v* (ex.: v0.2.0) gera os instaladores e publica uma release. Mac e Windows saem do Tauri (src-tauri),
+# o Linux continua no Electron. Os links fixos releases/latest/download/Telao-{mac.dmg,windows.exe,linux.AppImage}
+# apontam sempre para a última; o Telao-mac.zip é o que o app do Mac baixa para se atualizar (o Tauri e o Electron 0.1.x).
 name: release
 
 on:
@@ -22,6 +23,12 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
+      - uses: dtolnay/rust-toolchain@stable
+        if: runner.os != 'Linux'
+      - uses: Swatinem/rust-cache@v2
+        if: runner.os != 'Linux'
+        with:
+          workspaces: src-tauri
       # som só do programa da janela transmitida (Windows): compila o nativo/telao-som.cpp
       - uses: ilammy/msvc-dev-cmd@v1
         if: runner.os == 'Windows'
@@ -38,10 +45,50 @@ jobs:
           security create-keychain -p x telao.keychain
           security list-keychains -d user -s telao.keychain login.keychain
           security unlock-keychain -p x telao.keychain
+          # sem trancar sozinho: o padrão é 5 min e o Rust leva mais que isso até assinar (o codesign travava pedindo senha)
+          security set-keychain-settings telao.keychain
           security import "$RUNNER_TEMP/telao.p12" -k telao.keychain -P "$SENHA" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k x telao.keychain
-          echo "MAC_ASSINATURA=Telao" >> "$GITHUB_ENV"
-      - run: npm run dist
+          echo "APPLE_SIGNING_IDENTITY=Telao" >> "$GITHUB_ENV"
+
+      - name: Mac (Tauri)
+        if: runner.os == 'macOS'
+        run: |
+          npx tauri build
+          mkdir -p dist dmg
+          APP=src-tauri/target/release/bundle/macos/Telao.app
+          ditto -c -k --keepParent "$APP" dist/Telao-mac.zip
+          # dmg sem o AppleScript do Finder (trava sem tela): o app e um atalho para Aplicativos
+          cp -R "$APP" dmg/ && ln -s /Applications dmg/Applications
+          hdiutil create -volname "Telão" -srcfolder dmg -ov -format UDZO dist/Telao-mac.dmg
+
+      - name: Windows (Tauri)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          npx tauri build
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item (Get-ChildItem src-tauri/target/release/bundle/nsis/*.exe)[0] dist/Telao-windows.exe
+          # O Electron 0.1.x instalado se atualiza lendo latest.yml: aponta para este instalador, que tira o Electron
+          # antigo e abre o app novo (src-tauri/windows/migrar-electron.nsh).
+          $exe = Get-Item dist/Telao-windows.exe
+          $sha = [Convert]::ToBase64String([Security.Cryptography.SHA512]::Create().ComputeHash([IO.File]::ReadAllBytes($exe.FullName)))
+          $versao = (Get-Content package.json | ConvertFrom-Json).version
+          @"
+          version: $versao
+          files:
+            - url: Telao-windows.exe
+              sha512: $sha
+              size: $($exe.Length)
+          path: Telao-windows.exe
+          sha512: $sha
+          releaseDate: '$((Get-Date).ToUniversalTime().ToString("o"))'
+          "@ | Set-Content -Encoding utf8NoBOM dist/latest.yml
+
+      - name: Linux (Electron)
+        if: runner.os == 'Linux'
+        run: npm run dist
+
       - uses: actions/upload-artifact@v4
         with:
           name: telao-${{ matrix.os }}
@@ -50,12 +97,13 @@ jobs:
             dist/*.zip
             dist/*.exe
             dist/*.AppImage
+            dist/latest*.yml
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          # tag com "-" (ex.: v0.1.2-beta.0) vira pré-lançamento: dá para testar sem mudar o link "latest"
+          # tag com "-" (ex.: v0.2.0-beta.0) vira pré-lançamento: dá para testar sem mudar o link "latest"
           prerelease: ${{ contains(github.ref_name, '-') }}
-          # latest*.yml e .blockmap: o atualizador automático lê daqui
+          # latest*.yml e .blockmap: o atualizador do Electron (Linux, e o Windows 0.1.x migrando) lê daqui
           files: |
             dist/*.dmg
             dist/*.zip

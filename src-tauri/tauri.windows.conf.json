@@ -1,0 +1,10 @@
+{
+  "bundle": {
+    "targets": [
+      "nsis"
+    ],
+    "resources": {
+      "../build/telao-som.exe": "telao-som.exe"
+    }
+  }
+}
