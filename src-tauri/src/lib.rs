@@ -31,6 +31,8 @@ pub fn run() {
   let app = tauri::Builder::default().plugin(tauri_plugin_opener::init());
   #[cfg(desktop)]
   let app = app
+    // Abrir o Telão de novo (menu Iniciar, atalho) com ele escondido: mostra a janela que já existe, sem segunda cópia
+    .plugin(tauri_plugin_single_instance::init(|app, _, _| mostrar(app)))
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_clipboard_manager::init())
     .manage(teclas::Estado::default())
@@ -76,6 +78,16 @@ pub fn run() {
         #[cfg(windows)]
         let janela = janela.user_agent(&ua_windows(&app.package_info().version.to_string()));
         let janela = janela.build()?;
+        // O X esconde (como o Discord): o app segue conectado e avisando. Sair de vez: ⌘Q no Mac, "Sair" no ícone do Windows.
+        let escondida = janela.clone();
+        janela.on_window_event(move |e| {
+          if let tauri::WindowEvent::CloseRequested { api, .. } = e {
+            api.prevent_close();
+            let _ = escondida.hide();
+          }
+        });
+        #[cfg(windows)]
+        icone_bandeja(app)?;
         #[cfg(not(debug_assertions))]
         atualizar::iniciar(app.handle().clone());
         let _ = janela;
@@ -84,12 +96,53 @@ pub fn run() {
     })
     .build(tauri::generate_context!())
     .expect("erro ao abrir o Telão")
-    .run(|_, evento| {
-      if let tauri::RunEvent::Exit = evento {
+    .run(|_app, evento| match evento {
+      tauri::RunEvent::Exit => {
         #[cfg(all(desktop, not(debug_assertions)))]
         atualizar::ao_sair();
       }
+      // Mac: clicar no ícone do Dock com a janela escondida
+      #[cfg(target_os = "macos")]
+      tauri::RunEvent::Reopen { .. } => mostrar(_app),
+      _ => {}
     });
+}
+
+#[cfg(desktop)]
+fn mostrar(app: &AppHandle) {
+  if let Some(j) = app.get_webview_window("principal") {
+    let _ = j.unminimize();
+    let _ = j.show();
+    let _ = j.set_focus();
+  }
+}
+
+// Windows: ícone perto do relógio. Clicar abre a janela; o menu tem "Sair", que fecha de verdade.
+#[cfg(windows)]
+fn icone_bandeja(app: &tauri::App) -> tauri::Result<()> {
+  use tauri::menu::{Menu, MenuItem};
+  use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+  let abrir = MenuItem::with_id(app, "abrir", "Abrir Telão", true, None::<&str>)?;
+  let sair = MenuItem::with_id(app, "sair", "Sair", true, None::<&str>)?;
+  let mut icone = TrayIconBuilder::new()
+    .tooltip("Telão")
+    .menu(&Menu::with_items(app, &[&abrir, &sair])?)
+    .show_menu_on_left_click(false)
+    .on_menu_event(|app, e| match e.id.as_ref() {
+      "abrir" => mostrar(app),
+      "sair" => app.exit(0),
+      _ => {}
+    })
+    .on_tray_icon_event(|t, e| {
+      if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e {
+        mostrar(t.app_handle());
+      }
+    });
+  if let Some(i) = app.default_window_icon() {
+    icone = icone.icon(i.clone());
+  }
+  icone.build(app)?;
+  Ok(())
 }
 
 // Roda dentro do evento de navegação do webview: abrir o navegador ali mesmo segura a janela, então vai numa thread.
