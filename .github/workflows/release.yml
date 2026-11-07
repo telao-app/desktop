@@ -45,6 +45,8 @@ jobs:
           security create-keychain -p x telao.keychain
           security list-keychains -d user -s telao.keychain login.keychain
           security unlock-keychain -p x telao.keychain
+          # sem trancar sozinho: o padrão é 5 min e o Rust leva mais que isso até assinar (o codesign travava pedindo senha)
+          security set-keychain-settings telao.keychain
           security import "$RUNNER_TEMP/telao.p12" -k telao.keychain -P "$SENHA" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k x telao.keychain
           echo "APPLE_SIGNING_IDENTITY=Telao" >> "$GITHUB_ENV"
