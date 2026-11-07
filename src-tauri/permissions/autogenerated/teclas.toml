@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-teclas"
+description = "Enables the teclas command without any pre-configured scope."
+commands.allow = ["teclas"]
+
+[[permission]]
+identifier = "deny-teclas"
+description = "Denies the teclas command without any pre-configured scope."
+commands.deny = ["teclas"]

@@ -1,0 +1,35 @@
+[package]
+name = "telao"
+version = "0.0.0" # a versão do app vem do package.json (tauri.conf.json)
+description = "Telão: texto, voz, câmera e tela com a sua turma"
+edition = "2021"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+tauri = { version = "2.12", features = [] }
+tauri-plugin-dialog = "2.7"
+tauri-plugin-clipboard-manager = "2.3"
+tauri-plugin-opener = "2.5"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.13", default-features = false, features = ["json", "native-tls"] }
+tokio = { version = "1", features = ["time"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSDictionary", "NSString", "NSValue", "NSUUID", "NSObject"] }
+
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.39"
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_Com"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+
+# proc-macros sem strip: no macOS 27 o strip deixa a dylib desalinhada e o rustc não consegue carregá-la
+[profile.release.build-override]
+strip = false

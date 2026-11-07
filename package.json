@@ -8,9 +8,13 @@
   "type": "commonjs",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --publish never"
+    "dist": "electron-builder --linux --publish never",
+    "tauri": "tauri",
+    "start:tauri": "cargo run --manifest-path src-tauri/Cargo.toml",
+    "dist:tauri": "tauri build"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "2.12.4",
     "electron": "^45.2.2",
     "electron-builder": "^26.18.0"
   },
@@ -22,43 +26,16 @@
       "seletor.html",
       "package.json"
     ],
-    "mac": {
-      "target": [
-        "dmg",
-        "zip"
-      ],
-      "identity": "-",
-      "hardenedRuntime": false,
-      "category": "public.app-category.social-networking",
-      "extendInfo": {
-        "CFBundleDisplayName": "Telão"
-      },
-      "artifactName": "Telao-mac.${ext}"
-    },
-    "win": {
-      "target": "nsis",
-      "artifactName": "Telao-windows.${ext}",
-      "extraResources": [
-        {
-          "from": "build/telao-som.exe",
-          "to": "telao-som.exe"
-        }
-      ]
-    },
     "linux": {
       "target": "AppImage",
       "category": "Network",
       "artifactName": "Telao-linux.${ext}"
-    },
-    "nsis": {
-      "shortcutName": "Telão"
     },
     "publish": {
       "provider": "github",
       "owner": "telao-app",
       "repo": "telao-app-desktop"
     },
-    "afterSign": "assinar.js",
     "npmRebuild": false
   },
   "repository": "github:telao-app/telao-app-desktop",

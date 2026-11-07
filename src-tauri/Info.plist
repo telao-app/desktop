@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDisplayName</key>
+  <string>Telão</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Para você falar nas salas de voz do Telão.</string>
+  <key>NSCameraUsageDescription</key>
+  <string>Para você ligar a câmera nas salas do Telão.</string>
+  <key>NSAudioCaptureUsageDescription</key>
+  <string>Para o som do computador ir junto quando você transmite a tela.</string>
+</dict>
+</plist>
