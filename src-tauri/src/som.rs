@@ -8,8 +8,14 @@ use tauri::{AppHandle, State};
 #[derive(Default)]
 pub struct Estado(Mutex<Option<Captura>>);
 
+// async: fora da thread principal (no Windows, comando síncrono trava a janela)
 #[tauri::command]
-pub fn som(app: AppHandle, estado: State<Estado>, alvo: String, pcm: Channel<InvokeResponseBody>) -> Result<(), String> {
+pub async fn som(
+  app: AppHandle,
+  estado: State<'_, Estado>,
+  alvo: String,
+  pcm: Channel<InvokeResponseBody>,
+) -> Result<(), String> {
   let mut atual = estado.0.lock().unwrap();
   *atual = None; // encerra a anterior antes de abrir outra
   *atual = Some(Captura::iniciar(&app, &alvo, pcm)?);
@@ -17,8 +23,9 @@ pub fn som(app: AppHandle, estado: State<Estado>, alvo: String, pcm: Channel<Inv
 }
 
 #[tauri::command]
-pub fn som_parar(estado: State<Estado>) {
+pub async fn som_parar(estado: State<'_, Estado>) -> Result<(), String> {
   *estado.0.lock().unwrap() = None;
+  Ok(())
 }
 
 #[cfg(windows)]

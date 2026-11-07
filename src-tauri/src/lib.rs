@@ -86,9 +86,11 @@ pub fn run() {
     });
 }
 
+// Roda dentro do evento de navegação do webview: abrir o navegador ali mesmo segura a janela, então vai numa thread.
 fn fora(url: &Url) -> bool {
   if matches!(url.scheme(), "http" | "https" | "mailto") {
-    let _ = tauri_plugin_opener::open_url(url.as_str(), None::<&str>);
+    let url = url.to_string();
+    std::thread::spawn(move || tauri_plugin_opener::open_url(url, None::<&str>));
   }
   false
 }
@@ -140,7 +142,7 @@ fn user_agent_windows(janela: &WebviewWindow, versao: String, site: Url) {
 // Ctrl+Shift+D (⌘⇧D no Mac): o que a minha tela está enviando e por que está limitada
 #[cfg(desktop)]
 #[tauri::command]
-fn diagnostico(app: AppHandle, texto: String) {
+async fn diagnostico(app: AppHandle, texto: String) {
   #[allow(unused_mut)]
   let mut relatorio = format!("Telão {} · {}\n{texto}", app.package_info().version, std::env::consts::OS);
   #[cfg(windows)]
