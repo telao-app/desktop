@@ -1,7 +1,7 @@
 {
   "name": "telao-desktop",
   "productName": "Telao",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Transmissão de tela, câmera e voz para o grupo",
   "author": "Lucas Lima <luccasplima@gmail.com>",
   "main": "main.js",
