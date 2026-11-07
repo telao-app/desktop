@@ -5,6 +5,8 @@
 #[cfg(desktop)]
 mod atualizar;
 #[cfg(desktop)]
+mod jogo;
+#[cfg(desktop)]
 mod som;
 #[cfg(desktop)]
 mod teclas;
@@ -33,7 +35,7 @@ pub fn run() {
     .plugin(tauri_plugin_clipboard_manager::init())
     .manage(teclas::Estado::default())
     .manage(som::Estado::default())
-    .invoke_handler(tauri::generate_handler![teclas::teclas, som::som, som::som_parar, diagnostico]);
+    .invoke_handler(tauri::generate_handler![teclas::teclas, som::som, som::som_parar, jogo::jogo, diagnostico]);
   app
     .setup(|app| {
       let site: Url = std::env::var("TELAO_URL").unwrap_or_else(|_| URL_PADRAO.into()).parse()?;

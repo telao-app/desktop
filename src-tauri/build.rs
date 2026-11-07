@@ -5,6 +5,7 @@ fn main() {
     "som",
     "som_parar",
     "diagnostico",
+    "jogo",
   ])))
   .expect("tauri-build");
 }
