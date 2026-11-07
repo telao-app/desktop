@@ -1,4 +1,4 @@
-# Push de tag v* (ex.: v0.2.0) gera os instaladores e publica uma release. Mac, Windows e Android saem do Tauri
+# Push de tag v* (ex.: v0.2.0) gera os instaladores e publica uma release (só no fim, com todos juntos). Mac, Windows e Android saem do Tauri
 # (src-tauri), o Linux continua no Electron. Os links fixos releases/latest/download/Telao-{mac.dmg,windows.exe,
 # linux.AppImage,android.apk} apontam sempre para a última; o Telao-mac.zip é o que o app do Mac baixa para se atualizar.
 # iOS: só compila para o simulador (sem conta da Apple não há .ipa instalável) e fica como artefato do workflow.
@@ -99,18 +99,6 @@ jobs:
             dist/*.exe
             dist/*.AppImage
             dist/latest*.yml
-      - uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          # tag com "-" (ex.: v0.2.0-beta.0) vira pré-lançamento: dá para testar sem mudar o link "latest"
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          # latest*.yml e .blockmap: o atualizador do Electron (Linux, e o Windows 0.1.x migrando) lê daqui
-          files: |
-            dist/*.dmg
-            dist/*.zip
-            dist/*.exe
-            dist/*.AppImage
-            dist/latest*.yml
             dist/*.blockmap
 
   android:
@@ -153,11 +141,34 @@ jobs:
         with:
           name: telao-android
           path: dist/Telao-android.apk
-      - uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+
+  # Uma release só, com os instaladores todos. Antes cada sistema publicava ao terminar: o primeiro já virava a "última"
+  # sem o do Windows, e por ~10 min o link de download dava 404 e o app não achava a atualização.
+  publicar:
+    needs: [build, android]
+    # o Android falhar não segura o desktop (o APK só fica de fora)
+    if: always() && startsWith(github.ref, 'refs/tags/') && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
         with:
+          pattern: telao-*
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          # tag com "-" (ex.: v0.2.0-beta.0) vira pré-lançamento: dá para testar sem mudar o link "latest"
           prerelease: ${{ contains(github.ref_name, '-') }}
-          files: dist/Telao-android.apk
+          # latest*.yml e .blockmap: o atualizador do Electron (Linux, e o Windows 0.1.x migrando) lê daqui
+          # Telao-mac.zip pelo nome: o zip do simulador do iOS também pode estar nos artefatos e não vai para a release
+          files: |
+            dist/*.dmg
+            dist/Telao-mac.zip
+            dist/*.exe
+            dist/*.AppImage
+            dist/*.apk
+            dist/latest*.yml
+            dist/*.blockmap
 
   ios:
     runs-on: macos-latest
