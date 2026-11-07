@@ -46,29 +46,68 @@ fn caminhos() -> Vec<String> {
 
 #[cfg(windows)]
 fn caminhos() -> Vec<String> {
-  use windows::core::PWSTR;
   use windows::Win32::Foundation::CloseHandle;
   use windows::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS};
-  use windows::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION};
   let mut saida = Vec::new();
   unsafe {
     let Ok(lista) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return saida };
     let mut p = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
     let mut tem = Process32FirstW(lista, &mut p).is_ok();
     while tem {
-      if let Ok(h) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, p.th32ProcessID) {
-        let mut buf = [0u16; 1024];
-        let mut n = buf.len() as u32;
-        if QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut n).is_ok() {
-          saida.push(String::from_utf16_lossy(&buf[..n as usize]));
-        }
-        let _ = CloseHandle(h);
-      }
+      saida.extend(caminho(p.th32ProcessID));
       tem = Process32NextW(lista, &mut p).is_ok();
     }
     let _ = CloseHandle(lista);
   }
   saida
+}
+
+#[cfg(windows)]
+fn caminho(pid: u32) -> Option<String> {
+  use windows::core::PWSTR;
+  use windows::Win32::Foundation::CloseHandle;
+  use windows::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION};
+  unsafe {
+    let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+    let mut buf = [0u16; 1024];
+    let mut n = buf.len() as u32;
+    let ok = QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut n).is_ok();
+    let _ = CloseHandle(h);
+    ok.then(|| String::from_utf16_lossy(&buf[..n as usize]))
+  }
+}
+
+// Windows: jogo em tela cheia exclusiva se minimiza quando a pessoa sai dele para escolher a janela, e o seletor do
+// WebView2 não lista janela minimizada. Antes do seletor abrir, traz de volta as janelas minimizadas de jogo (mesma regra
+// do "Jogando X"), sem foco e para trás das outras, para elas aparecerem na lista.
+#[tauri::command(async)]
+pub fn restaurar_jogos() {
+  #[cfg(windows)]
+  unsafe {
+    use windows::core::BOOL;
+    use windows::Win32::Foundation::{HWND, LPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::{
+      EnumWindows, GetWindowThreadProcessId, IsIconic, IsWindowVisible, SetWindowPos, ShowWindow, HWND_BOTTOM, SWP_NOACTIVATE,
+      SWP_NOMOVE, SWP_NOSIZE, SW_SHOWNOACTIVATE,
+    };
+    unsafe extern "system" fn juntar(hwnd: HWND, l: LPARAM) -> BOOL {
+      (*(l.0 as *mut Vec<HWND>)).push(hwnd);
+      true.into()
+    }
+    let mut janelas: Vec<HWND> = Vec::new();
+    let _ = EnumWindows(Some(juntar), LPARAM(&mut janelas as *mut _ as isize));
+    for h in janelas {
+      if !IsWindowVisible(h).as_bool() || !IsIconic(h).as_bool() {
+        continue;
+      }
+      let mut pid = 0u32;
+      GetWindowThreadProcessId(h, Some(&mut pid));
+      if caminho(pid).and_then(|c| nome(&c)).is_some() {
+        let _ = ShowWindow(h, SW_SHOWNOACTIVATE);
+        let _ = SetWindowPos(h, Some(HWND_BOTTOM), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+      }
+    }
+  }
 }
 
 #[cfg(test)]
