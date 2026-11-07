@@ -80,7 +80,13 @@
   const janelaDe = (faixa) => /^window:(\d+):/.exec(faixa.label)?.[1] ?? /^window:(\d+):/.exec(faixa.getSettings().deviceId ?? "")?.[1];
 
   const md = navigator.mediaDevices;
-  const original = md?.getDisplayMedia?.bind(md);
+  const nativo = md?.getDisplayMedia?.bind(md);
+  // Windows: some a barra "<site> está compartilhando uma janela" do WebView2 (o Telão já mostra e tem o botão de parar)
+  const original = nativo && (async (pedido) => {
+    const s = await nativo(pedido);
+    if (!mac) T.invoke("esconder_barra").catch(() => {});
+    return s;
+  });
   if (original) {
     md.getDisplayMedia = async (pedido = {}) => {
       if (!pedido.audio) return original(pedido);

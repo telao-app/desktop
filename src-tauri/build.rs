@@ -10,6 +10,7 @@ fn main() {
     "abrir_com_pc",
     "atualizacao",
     "atualizar",
+    "esconder_barra",
   ])))
   .expect("tauri-build");
 }

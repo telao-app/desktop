@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-esconder-barra"
+description = "Enables the esconder_barra command without any pre-configured scope."
+commands.allow = ["esconder_barra"]
+
+[[permission]]
+identifier = "deny-esconder-barra"
+description = "Denies the esconder_barra command without any pre-configured scope."
+commands.deny = ["esconder_barra"]
