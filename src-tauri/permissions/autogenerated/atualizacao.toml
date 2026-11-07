@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-atualizacao"
+description = "Enables the atualizacao command without any pre-configured scope."
+commands.allow = ["atualizacao"]
+
+[[permission]]
+identifier = "deny-atualizacao"
+description = "Denies the atualizacao command without any pre-configured scope."
+commands.deny = ["atualizacao"]

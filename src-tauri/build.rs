@@ -8,6 +8,8 @@ fn main() {
     "jogo",
     "notificar",
     "abrir_com_pc",
+    "atualizacao",
+    "atualizar",
   ])))
   .expect("tauri-build");
 }

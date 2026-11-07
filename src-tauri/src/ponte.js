@@ -34,7 +34,9 @@
       }),
     jogo: () => T.invoke("jogo"),
     abrirComPc: (ligar) => T.invoke("abrir_com_pc", { ligar: ligar ?? null }),
-    notificacoes: true, // o site liga as notificações uma vez nesta versão (antes no Mac elas nem existiam no app)
+    notificacoes: true,
+    atualizacao: () => T.invoke("atualizacao"), // versão nova pronta ("0.2.5") ou null
+    atualizar: () => T.invoke("atualizar"), // instala e reabre, como o "Reiniciar agora" do aviso // o site liga as notificações uma vez nesta versão (antes no Mac elas nem existiam no app)
   };
 
   // Notificação do navegador vira a do sistema: o site segue usando `new Notification(...)` e o `onclick` dela (abrir a

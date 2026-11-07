@@ -30,6 +30,7 @@ struct Asset {
 struct Pendente {
   novo: PathBuf,
   reabrir: bool,
+  versao: String,
 }
 static PENDENTE: Mutex<Option<Pendente>> = Mutex::new(None);
 
@@ -67,7 +68,7 @@ async fn checar(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         let _ = tauri_plugin_opener::open_url(url, None::<&str>);
       }
     });
-    *PENDENTE.lock().unwrap() = Some(Pendente { novo: PathBuf::new(), reabrir: false });
+    *PENDENTE.lock().unwrap() = Some(Pendente { novo: PathBuf::new(), reabrir: false, versao: ultima.tag_name.clone() });
     return Ok(());
   }
   let dir = std::env::temp_dir().join(format!("telao-{}", ultima.tag_name));
@@ -85,7 +86,7 @@ async fn checar(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
   };
   #[cfg(windows)]
   let novo = arquivo;
-  *PENDENTE.lock().unwrap() = Some(Pendente { novo, reabrir: false });
+  *PENDENTE.lock().unwrap() = Some(Pendente { novo, reabrir: false, versao: ultima.tag_name.clone() });
   perguntar(app, &ultima.tag_name);
   Ok(())
 }
@@ -99,12 +100,29 @@ fn perguntar(app: &AppHandle, versao: &str) {
     .buttons(MessageDialogButtons::OkCancelCustom("Reiniciar agora".into(), "Depois".into()))
     .show(move |agora| {
       if agora {
-        if let Some(p) = PENDENTE.lock().unwrap().as_mut() {
-          p.reabrir = true;
-        }
-        sair.exit(0);
+        reiniciar(&sair);
       }
     });
+}
+
+fn reiniciar(app: &AppHandle) {
+  if let Some(p) = PENDENTE.lock().unwrap().as_mut() {
+    p.reabrir = true;
+  }
+  app.exit(0); // ao_sair instala e reabre
+}
+
+// "Sobre" do site: a versão já baixada e pronta para instalar (sem nenhuma, null) e o mesmo "Reiniciar agora" do aviso.
+#[tauri::command(async)]
+pub fn atualizacao() -> Option<String> {
+  PENDENTE.lock().unwrap().as_ref().filter(|p| !p.novo.as_os_str().is_empty()).map(|p| p.versao.trim_start_matches('v').to_string())
+}
+
+#[tauri::command(async)]
+pub fn atualizar(app: AppHandle) {
+  if atualizacao().is_some() {
+    reiniciar(&app);
+  }
 }
 
 #[cfg(target_os = "macos")]
