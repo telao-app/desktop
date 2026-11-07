@@ -7,6 +7,7 @@ fn main() {
     "diagnostico",
     "jogo",
     "notificar",
+    "abrir_com_pc",
   ])))
   .expect("tauri-build");
 }
