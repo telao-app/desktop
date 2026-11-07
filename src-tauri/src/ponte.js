@@ -3,6 +3,7 @@
 // - getDisplayMedia: o vídeo vem do próprio webview (seletor do sistema); o som vem do nativo, como PCM int16
 //   estéreo 48 kHz: no Mac o som do computador sem o que o próprio Telão toca, no Windows o som só do programa
 //   da janela escolhida (tela inteira: o seletor do WebView2 já oferece o som do sistema).
+// - window.Notification: a notificação do site sai como a do sistema; clicar abre a sala.
 // - window.telaoDesktop.jogo: nome do jogo aberto ("Jogando X"), ou null.
 // - Ctrl+Shift+D (⌘⇧D no Mac): diagnóstico da transmissão.
 (() => {
@@ -32,6 +33,27 @@
         eventos: canal((e) => (e.atalho ? aoApertar(e.atalho) : aoFalar(e.falar))),
       }),
     jogo: () => T.invoke("jogo"),
+    notificacoes: true, // o site liga as notificações uma vez nesta versão (antes no Mac elas nem existiam no app)
+  };
+
+  // Notificação do navegador vira a do sistema: o site segue usando `new Notification(...)` e o `onclick` dela (abrir a
+  // sala), e o app mostra a nativa. No Mac o WebKit do app nem tem essa API. Permissão: o próprio sistema cuida.
+  const abertas = new Map();
+  let seq = 0;
+  const cliques = canal((id) => abertas.get(id)?.onclick?.());
+  window.Notification = class {
+    static permission = "granted";
+    static requestPermission = async () => "granted";
+    constructor(titulo, o = {}) {
+      this.onclick = null;
+      this.id = ++seq;
+      abertas.set(this.id, this);
+      if (abertas.size > 50) abertas.delete(abertas.keys().next().value);
+      T.invoke("notificar", { id: this.id, titulo, corpo: o.body ?? "", cliques }).catch((e) => console.warn("notificação:", e));
+    }
+    close() {
+      abertas.delete(this.id);
+    }
   };
 
   // toca o PCM que chega do nativo; se acumular atraso, descarta o excesso

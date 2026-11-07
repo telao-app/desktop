@@ -7,6 +7,8 @@ mod atualizar;
 #[cfg(desktop)]
 mod jogo;
 #[cfg(desktop)]
+mod notificacao;
+#[cfg(desktop)]
 mod som;
 #[cfg(desktop)]
 mod teclas;
@@ -34,10 +36,12 @@ pub fn run() {
     // Abrir o Telão de novo (menu Iniciar, atalho) com ele escondido: mostra a janela que já existe, sem segunda cópia
     .plugin(tauri_plugin_single_instance::init(|app, _, _| mostrar(app)))
     .plugin(tauri_plugin_dialog::init())
+    .plugin(tauri_plugin_notification::init())
+    .manage(notificacao::Estado::default())
     .plugin(tauri_plugin_clipboard_manager::init())
     .manage(teclas::Estado::default())
     .manage(som::Estado::default())
-    .invoke_handler(tauri::generate_handler![teclas::teclas, som::som, som::som_parar, jogo::jogo, diagnostico]);
+    .invoke_handler(tauri::generate_handler![teclas::teclas, som::som, som::som_parar, jogo::jogo, notificacao::notificar, diagnostico]);
   app
     .setup(|app| {
       let site: Url = std::env::var("TELAO_URL").unwrap_or_else(|_| URL_PADRAO.into()).parse()?;
@@ -88,6 +92,7 @@ pub fn run() {
         });
         #[cfg(windows)]
         icone_bandeja(app)?;
+        notificacao::iniciar(app.handle());
         #[cfg(not(debug_assertions))]
         atualizar::iniciar(app.handle().clone());
         let _ = janela;
