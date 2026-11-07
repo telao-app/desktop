@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-jogo"
+description = "Enables the jogo command without any pre-configured scope."
+commands.allow = ["jogo"]
+
+[[permission]]
+identifier = "deny-jogo"
+description = "Denies the jogo command without any pre-configured scope."
+commands.deny = ["jogo"]

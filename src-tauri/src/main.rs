@@ -3,6 +3,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod atualizar;
+mod jogo;
 mod som;
 mod teclas;
 
@@ -25,7 +26,7 @@ fn main() {
     .plugin(tauri_plugin_opener::init())
     .manage(teclas::Estado::default())
     .manage(som::Estado::default())
-    .invoke_handler(tauri::generate_handler![teclas::teclas, som::som, som::som_parar, diagnostico])
+    .invoke_handler(tauri::generate_handler![teclas::teclas, som::som, som::som_parar, jogo::jogo, diagnostico])
     .setup(|app| {
       let site: Url = std::env::var("TELAO_URL").unwrap_or_else(|_| URL_PADRAO.into()).parse()?;
       let origem = site.origin();
