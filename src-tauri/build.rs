@@ -6,6 +6,7 @@ fn main() {
     "som_parar",
     "diagnostico",
     "jogo",
+    "restaurar_jogos",
     "notificar",
     "abrir_com_pc",
     "atualizacao",

@@ -83,6 +83,8 @@
   const nativo = md?.getDisplayMedia?.bind(md);
   // Windows: some a barra "<site> está compartilhando uma janela" do WebView2 (o Telão já mostra e tem o botão de parar)
   const original = nativo && (async (pedido) => {
+    // Windows: jogo em tela cheia minimizado não entra no seletor; o app traz de volta antes de ele abrir
+    if (!mac) await T.invoke("restaurar_jogos").catch(() => {});
     const s = await nativo(pedido);
     if (!mac) T.invoke("esconder_barra").catch(() => {});
     return s;

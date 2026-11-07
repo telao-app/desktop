@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-restaurar-jogos"
+description = "Enables the restaurar_jogos command without any pre-configured scope."
+commands.allow = ["restaurar_jogos"]
+
+[[permission]]
+identifier = "deny-restaurar-jogos"
+description = "Denies the restaurar_jogos command without any pre-configured scope."
+commands.deny = ["restaurar_jogos"]
