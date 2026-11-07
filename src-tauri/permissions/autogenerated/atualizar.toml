@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-atualizar"
+description = "Enables the atualizar command without any pre-configured scope."
+commands.allow = ["atualizar"]
+
+[[permission]]
+identifier = "deny-atualizar"
+description = "Denies the atualizar command without any pre-configured scope."
+commands.deny = ["atualizar"]

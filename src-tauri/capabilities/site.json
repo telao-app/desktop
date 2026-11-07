@@ -6,5 +6,5 @@
   "remote": {
     "urls": ["https://telao.nyxdev.com.br/*", "http://localhost:5173/*"]
   },
-  "permissions": ["allow-teclas", "allow-som", "allow-som-parar", "allow-diagnostico", "allow-jogo", "allow-notificar", "allow-abrir-com-pc"]
+  "permissions": ["allow-teclas", "allow-som", "allow-som-parar", "allow-diagnostico", "allow-jogo", "allow-notificar", "allow-abrir-com-pc", "allow-atualizacao", "allow-atualizar"]
 }
