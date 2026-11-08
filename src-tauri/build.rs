@@ -13,6 +13,7 @@ fn main() {
     "atualizacao",
     "atualizar",
     "esconder_barra",
+    "testar_captura",
   ])))
   .expect("tauri-build");
 }
