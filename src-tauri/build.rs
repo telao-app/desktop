@@ -6,14 +6,16 @@ fn main() {
     "som_parar",
     "diagnostico",
     "jogo",
-    "jogos_minimizados",
-    "perguntar_jogo",
     "notificar",
     "abrir_com_pc",
     "atualizacao",
     "atualizar",
     "esconder_barra",
-    "testar_captura",
+    "fontes",
+    "miniatura",
+    "captura",
+    "captura_parar",
+    "captura_estado",
   ])))
   .expect("tauri-build");
 }

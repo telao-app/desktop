@@ -1,8 +1,10 @@
 // Ponte entre o site e o app (Tauri). Roda antes do site, em toda página da janela principal.
 // - window.telaoDesktop.teclas: atalhos e apertar para falar com o app em segundo plano (mesmo contrato do Electron).
-// - getDisplayMedia: o vídeo vem do próprio webview (seletor do sistema); o som vem do nativo, como PCM int16
-//   estéreo 48 kHz: no Mac o som do computador sem o que o próprio Telão toca, no Windows o som só do programa
-//   da janela escolhida (tela inteira: o seletor do WebView2 já oferece o som do sistema).
+// - getDisplayMedia: no Windows, seletor próprio (janelas, jogos em tela cheia, telas) e captura pelo app (captura.rs):
+//   cada quadro chega por memória compartilhada do WebView2 e vira a faixa de vídeo. No Mac (e no Windows, se a captura
+//   própria falhar) o vídeo vem do próprio webview (seletor do sistema). O som vem do nativo, como PCM int16 estéreo
+//   48 kHz: no Mac o som do computador sem o que o próprio Telão toca; no Windows o som só do programa da janela
+//   escolhida, ou na tela inteira o do computador menos o do Telão.
 // - window.Notification: a notificação do site sai como a do sistema; clicar abre a sala.
 // - window.telaoDesktop.jogo: nome do jogo aberto ("Jogando X"), ou null.
 // - Ctrl+Shift+D (⌘⇧D no Mac): diagnóstico da transmissão.
@@ -77,87 +79,440 @@
   });`;
 
   // Windows: o Chromium do WebView2 rotula a faixa de janela como "window:<hwnd>:0"
-  const janelaDe = (faixa) => /^window:(\d+):/.exec(faixa.label)?.[1] ?? /^window:(\d+):/.exec(faixa.getSettings().deviceId ?? "")?.[1] ?? janelaJogo;
+  const janelaDe = (faixa) => /^window:(\d+):/.exec(faixa.label)?.[1] ?? /^window:(\d+):/.exec(faixa.getSettings().deviceId ?? "")?.[1];
 
   const md = navigator.mediaDevices;
   const nativo = md?.getDisplayMedia?.bind(md);
-  let seletor = ""; // o que o app viu das janelas de jogo ao abrir o seletor (vai para o diagnóstico)
-  let janelaJogo = null; // jogo escolhido fora do seletor (o som vem só dele, como numa janela escolhida no seletor)
-  // Windows: some a barra "<site> está compartilhando uma janela" do WebView2 (o Telão já mostra e tem o botão de parar)
-  const original = nativo && (async (pedido) => {
-    // Windows: jogo em tela cheia fica minimizado e não entra no seletor; pergunta e pede a captura direto pela janela
-    janelaJogo = null;
-    if (!mac) {
-      const r = await T.invoke("jogos_minimizados").catch((e) => ({ relatorio: "falhou: " + e, minimizados: [] }));
-      seletor = r.relatorio;
-      const jogo = r.minimizados[0];
-      // Pedir a janela pelo id, sem o seletor, o WebView2 recusa ("Error starting tab capture"): vai a tela onde o jogo
-      // está (o seletor abre na aba de telas) e o som só do jogo, pela janela dele.
-      if (jogo && (await T.invoke("perguntar_jogo", { nome: jogo.nome }).catch(() => false))) {
-        janelaJogo = jogo.hwnd;
-        seletor += "\ntransmitindo a tela do jogo, com o som da janela dele";
-        // captura própria, passo 1: mede 30 s da janela do jogo (volte para o jogo) e o resultado entra no diagnóstico
-        T.invoke("testar_captura", { hwnd: jogo.hwnd }).then((r) => (seletor += "\ncaptura própria: " + r), (e) => (seletor += "\ncaptura própria falhou: " + e));
-        const video = { ...(typeof pedido.video === "object" ? pedido.video : {}), displaySurface: "monitor" };
-        const s = await nativo({ ...pedido, video, audio: false });
-        T.invoke("esconder_barra").catch(() => {});
-        return s;
-      }
-    }
-    const s = await nativo(pedido);
-    if (!mac) T.invoke("esconder_barra").catch(() => {});
-    return s;
-  });
-  if (original) {
-    md.getDisplayMedia = async (pedido = {}) => {
-      if (!pedido.audio) return original(pedido);
-      let stream, alvo;
-      if (mac) {
-        // o WebKit não entrega som de tela; pedir áudio a ele só atrapalha
-        stream = await original({ ...pedido, audio: false });
-        alvo = "sistema";
-      } else {
-        stream = await original(pedido);
-        const hwnd = janelaDe(stream.getVideoTracks()[0]);
-        if (!hwnd || stream.getAudioTracks().length) return stream;
-        alvo = hwnd;
-      }
-      const ac = new AudioContext({ sampleRate: 48000 });
+  let relato = ""; // como foi a última captura (vai para o diagnóstico)
+  let capturando = false; // captura própria no ar
+
+  // Som do nativo virando faixa de áudio. alvo: hwnd da janela, ou "sistema". null se não deu (sem permissão, Windows
+  // antigo): a tela segue só com vídeo, como no navegador.
+  async function somNativo(alvo) {
+    const ac = new AudioContext({ sampleRate: 48000 });
+    try {
       await ac.audioWorklet.addModule(URL.createObjectURL(new Blob([worklet], { type: "text/javascript" })));
       const no = new AudioWorkletNode(ac, "telao-som", { outputChannelCount: [2] });
       const destino = ac.createMediaStreamDestination();
       no.connect(destino);
-      try {
-        await T.invoke("som", { alvo, pcm: canal((buf) => no.port.postMessage(buf, [buf])) });
-      } catch (e) {
-        // sem permissão de gravar o som (ou Windows antigo): a tela segue só com vídeo, como no navegador
-        console.warn("som da transmissão:", e);
-        ac.close();
-        return stream;
-      }
-      stream.addTrack(destino.stream.getAudioTracks()[0]);
-      // parar a transmissão (stop() da página ou o fim da captura) encerra o som nativo
-      let parado = false;
-      const parar = () => {
-        if (parado) return;
-        parado = true;
-        T.invoke("som_parar");
-        ac.close();
+      await T.invoke("som", { alvo, pcm: canal((buf) => no.port.postMessage(buf, [buf])) });
+      return { faixa: destino.stream.getAudioTracks()[0], parar: () => { T.invoke("som_parar"); ac.close(); } };
+    } catch (e) {
+      console.warn("som da transmissão:", e);
+      ac.close();
+      return null;
+    }
+  }
+
+  // parar a transmissão (stop() da página ou o fim da captura) encerra o que o nativo estiver mandando
+  function aoParar(stream, parar) {
+    let parado = false;
+    const uma = () => { if (!parado) { parado = true; parar(); } };
+    for (const t of stream.getTracks()) {
+      const stop = t.stop.bind(t);
+      t.stop = () => { stop(); uma(); };
+      t.addEventListener("ended", uma);
+    }
+  }
+
+  // seletor do sistema (Mac; Windows quando a captura própria não deu)
+  async function peloSistema(pedido) {
+    if (!pedido.audio) {
+      const s = await nativo(pedido);
+      if (!mac) T.invoke("esconder_barra").catch(() => {});
+      return s;
+    }
+    let stream, alvo;
+    if (mac) {
+      // o WebKit não entrega som de tela; pedir áudio a ele só atrapalha
+      stream = await nativo({ ...pedido, audio: false });
+      alvo = "sistema";
+    } else {
+      stream = await nativo(pedido);
+      // Windows: some a barra "<site> está compartilhando uma janela" do WebView2 (o Telão já mostra e tem o botão de parar)
+      T.invoke("esconder_barra").catch(() => {});
+      const hwnd = janelaDe(stream.getVideoTracks()[0]);
+      if (!hwnd || stream.getAudioTracks().length) return stream;
+      alvo = hwnd;
+    }
+    const som = await somNativo(alvo);
+    if (!som) return stream;
+    stream.addTrack(som.faixa);
+    aoParar(stream, som.parar);
+    return stream;
+  }
+
+  // ---------- Windows: captura própria ----------
+
+  // cada quadro: o app escreve na memória compartilhada e avisa; a página copia para um VideoFrame e devolve o buffer
+  // (primeiro i32 = 0) para o app usar de novo
+  const recebedores = new Map(); // sessão -> (dados, buffer) => void
+  window.chrome?.webview?.addEventListener?.("sharedbufferreceived", (e) => {
+    const d = e.additionalData || {};
+    const buf = e.getBuffer();
+    try {
+      recebedores.get(d.s)?.(d, buf);
+    } catch (err) {
+      console.warn("quadro:", err);
+    } finally {
+      new Int32Array(buf, 0, 1)[0] = 0;
+      window.chrome.webview.releaseBuffer(buf);
+    }
+  });
+  const proprio = !mac && !!window.chrome?.webview?.releaseBuffer && typeof VideoFrame === "function";
+
+  // faixa de vídeo que recebe os quadros; o tamanho real aparece no getSettings (o site e o LiveKit leem dali)
+  function faixaDeVideo(fonte, fps) {
+    let largura = fonte.largura || 1920;
+    let altura = fonte.altura || 1080;
+    let faixa, escrever, fechar;
+    if (typeof MediaStreamTrackGenerator === "function") {
+      const gerador = new MediaStreamTrackGenerator({ kind: "video" });
+      const escritor = gerador.writable.getWriter();
+      let pendentes = 0;
+      escrever = (q) => {
+        if (pendentes > 2) return q.close(); // o codificador está atrasado: pula este
+        pendentes++;
+        escritor.write(q).then(() => pendentes--, () => { pendentes--; q.close(); });
       };
-      for (const t of stream.getTracks()) {
-        const stop = t.stop.bind(t);
-        t.stop = () => { stop(); parar(); };
-        t.addEventListener("ended", parar);
-      }
-      return stream;
+      fechar = () => escritor.close().catch(() => {});
+      faixa = gerador;
+    } else {
+      // sem o gerador: desenha num canvas e transmite o canvas
+      const tela = document.createElement("canvas");
+      tela.width = largura;
+      tela.height = altura;
+      const ctx = tela.getContext("2d", { alpha: false, desynchronized: true });
+      faixa = tela.captureStream(0).getVideoTracks()[0];
+      escrever = (q) => {
+        if (tela.width !== q.codedWidth || tela.height !== q.codedHeight) [tela.width, tela.height] = [q.codedWidth, q.codedHeight];
+        ctx.drawImage(q, 0, 0);
+        q.close();
+        faixa.requestFrame();
+      };
+      fechar = () => {};
+    }
+    const configuracao = faixa.getSettings.bind(faixa);
+    const superficie = fonte.tipo === "tela" ? "monitor" : "window";
+    faixa.getSettings = () => ({
+      ...configuracao(),
+      width: largura,
+      height: altura,
+      aspectRatio: largura / altura,
+      frameRate: fps,
+      displaySurface: superficie,
+      logicalSurface: true,
+      cursor: "always",
+      deviceId: fonte.id,
+    });
+    faixa.applyConstraints = async () => {}; // o tamanho e os quadros quem decide é a captura
+    Object.defineProperty(faixa, "label", { value: `${fonte.id}:${fonte.nome}` });
+    const quadro = (d, buf) => {
+      largura = d.w;
+      altura = d.h;
+      escrever(new VideoFrame(new Uint8Array(buf, d.o, d.w * d.h * 4), { format: "BGRX", codedWidth: d.w, codedHeight: d.h, timestamp: d.t }));
     };
+    return { faixa, quadro, fechar };
+  }
+
+  async function capturaPropria(pedido) {
+    const escolha = await seletorProprio(pedido);
+    const fonte = escolha.fonte;
+    const pedidoFps = typeof pedido.video === "object" ? pedido.video.frameRate : null;
+    const fps = Math.round(Math.min(120, Math.max(5, Number(pedidoFps?.max ?? pedidoFps?.ideal ?? pedidoFps) || 30)));
+    const v = faixaDeVideo(fonte, fps);
+    let sessao = null;
+    let acabou = false;
+    const fim = () => {
+      // a janela fechou: a faixa termina como termina a do navegador (o site tira a transmissão)
+      acabou = true;
+      v.fechar();
+      setTimeout(() => {
+        if (v.faixa.readyState === "live") {
+          v.faixa.stop();
+          v.faixa.dispatchEvent(new Event("ended"));
+        }
+      }, 100);
+    };
+    sessao = await T.invoke("captura", { id: fonte.id, fps, eventos: canal((m) => m === "fim" && fim()) });
+    recebedores.set(sessao, v.quadro);
+    capturando = true;
+    relato = `captura própria: ${fonte.jogo ? "jogo " + fonte.jogo : fonte.nome} (${fonte.id}), ${fps} fps pedidos` +
+      (fonte.minimizada ? ", estava minimizada" : "") + (typeof MediaStreamTrackGenerator === "function" ? "" : ", pelo canvas");
+    const stream = new MediaStream([v.faixa]);
+    const som = escolha.som ? await somNativo(fonte.tipo === "tela" ? "sistema" : fonte.id.split(":")[1]) : null;
+    if (som) stream.addTrack(som.faixa);
+    aoParar(stream, () => {
+      recebedores.delete(sessao);
+      capturando = false;
+      T.invoke("captura_parar", { sessao }).catch(() => {});
+      som?.parar();
+      if (!acabou) v.fechar();
+    });
+    return stream;
+  }
+
+  if (nativo) {
+    md.getDisplayMedia = async (pedido = {}) => {
+      if (proprio) {
+        try {
+          return await capturaPropria(pedido);
+        } catch (e) {
+          if (e?.name === "NotAllowedError") throw e; // a pessoa cancelou
+          console.warn("captura própria:", e);
+          relato = "captura própria falhou (" + (e?.message || e) + "), foi pelo seletor do WebView2";
+        }
+      }
+      return peloSistema(pedido);
+    };
+  }
+
+  // ---------- Windows: o seletor ----------
+
+  const CSS = `
+    :host { all: initial; }
+    * { box-sizing: border-box; }
+    .fundo { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px;
+      background: rgba(8, 6, 14, .62); backdrop-filter: blur(3px); color: #efeaf7; font: 14px/1.4 var(--fonte);
+      animation: surge .14s ease-out; }
+    .caixa { width: min(940px, 100%); height: min(660px, 100%); display: flex; flex-direction: column;
+      background: #231c31; border: 1px solid #3a3050; border-radius: 18px; box-shadow: 0 24px 70px rgba(0, 0, 0, .55);
+      animation: sobe .16s ease-out; outline: none; }
+    header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px 4px 22px; }
+    h2 { margin: 0; font-size: 18px; font-weight: 700; }
+    .x { border: 0; background: transparent; color: #b6abc8; width: 32px; height: 32px; border-radius: 50%; font-size: 22px;
+      line-height: 1; cursor: pointer; }
+    .x:hover { background: #33294a; color: #fff; }
+    nav { display: flex; gap: 6px; padding: 10px 22px 12px; }
+    .aba { border: 0; background: transparent; color: #b6abc8; padding: 7px 14px; border-radius: 999px; font: inherit;
+      font-weight: 600; cursor: pointer; }
+    .aba:hover { color: #fff; }
+    .aba[aria-selected="true"] { background: #3a2f53; color: #fff; }
+    .aba small { opacity: .6; font-weight: 500; margin-left: 5px; }
+    .grade { flex: 1; min-height: 220px; overflow: auto; padding: 4px 22px 20px; display: grid; gap: 14px;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); align-content: start; }
+    .cartao { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 7px; padding: 8px;
+      border-radius: 14px; border: 2px solid transparent; background: #2c2440; transition: background .12s, border-color .12s; }
+    .cartao:hover { background: #342a4b; }
+    .cartao:focus-visible { outline: 2px solid #f7d046; outline-offset: 2px; }
+    .cartao[aria-selected="true"] { border-color: #f7d046; background: #3a2f53; }
+    .mini { position: relative; aspect-ratio: 16 / 9; border-radius: 9px; overflow: hidden; background: #161120;
+      display: flex; align-items: center; justify-content: center; }
+    .mini canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .vazio { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 3px; padding: 10px 12px; text-align: center; color: #a69cba; font-size: 12px; background: #161120; }
+    [hidden] { display: none !important; }
+    .vazio b { color: #efeaf7; font-size: 15px; font-weight: 700; }
+    .selo { position: absolute; top: 7px; left: 7px; padding: 2px 8px; border-radius: 999px; background: #f7d046;
+      color: #231c31; font-size: 11px; font-weight: 800; letter-spacing: .02em; }
+    .nome { padding: 0 2px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sub { padding: 0 2px; margin-top: -5px; color: #a69cba; font-size: 12px; white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis; }
+    .nada { grid-column: 1 / -1; padding: 48px 0; text-align: center; color: #a69cba; }
+    footer { display: flex; align-items: center; gap: 12px; padding: 14px 20px 14px 22px; border-top: 1px solid #3a3050; }
+    .som { display: flex; align-items: center; gap: 8px; color: #d8d0e6; cursor: pointer; user-select: none; }
+    .som input { width: 16px; height: 16px; margin: 0; accent-color: #f7d046; cursor: pointer; }
+    .acoes { display: flex; gap: 10px; margin-left: auto; }
+    .acoes button { border: 0; border-radius: 999px; padding: 10px 20px; font: inherit; font-weight: 700; cursor: pointer; }
+    .cancelar { background: #3a2f53; color: #efeaf7; }
+    .cancelar:hover { background: #45385f; }
+    .ok { background: #f7d046; color: #231c31; }
+    .ok:hover { background: #ffdd5c; }
+    .ok:disabled { opacity: .4; cursor: default; }
+    @keyframes surge { from { opacity: 0; } }
+    @keyframes sobe { from { transform: translateY(8px) scale(.985); } }
+    @media (prefers-reduced-motion: reduce) { .fundo, .caixa { animation: none; } }
+  `;
+
+  // miniatura que o app manda: 8 bytes (largura, altura) e RGBA
+  async function desenharMiniatura(id, tela) {
+    const buf = await T.invoke("miniatura", { id }).catch(() => null);
+    if (!(buf instanceof ArrayBuffer) || buf.byteLength < 8) return false;
+    const [w, h] = new Uint32Array(buf, 0, 2);
+    if (!w || !h || buf.byteLength < 8 + w * h * 4) return false;
+    tela.width = w;
+    tela.height = h;
+    tela.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(buf, 8, w * h * 4), w, h), 0, 0);
+    return true;
+  }
+
+  // Lista as janelas abertas (jogo em tela cheia também, mesmo minimizado) e as telas, com miniatura, e devolve a
+  // escolhida. Cancelar rejeita como o seletor do navegador (NotAllowedError).
+  function seletorProprio(pedido) {
+    return new Promise((resolve, reject) => {
+      const host = document.createElement("div");
+      host.style.cssText = "position:fixed;inset:0;z-index:2147483647";
+      const raiz = host.attachShadow({ mode: "closed" });
+      raiz.innerHTML = `<style>${CSS}</style>
+        <div class="fundo">
+          <div class="caixa" role="dialog" aria-modal="true" aria-labelledby="t" tabindex="-1">
+            <header><h2 id="t">Mostrar minha tela</h2><button class="x" aria-label="Fechar">×</button></header>
+            <nav role="tablist">
+              <button class="aba" role="tab" data-aba="janela">Aplicativos<small></small></button>
+              <button class="aba" role="tab" data-aba="tela">Telas inteiras<small></small></button>
+            </nav>
+            <div class="grade" role="listbox" aria-label="O que mostrar"></div>
+            <footer>
+              <label class="som"><input type="checkbox"> Transmitir o som</label>
+              <div class="acoes"><button class="cancelar">Cancelar</button><button class="ok" disabled>Mostrar</button></div>
+            </footer>
+          </div>
+        </div>`;
+      const $ = (s) => raiz.querySelector(s);
+      $(".fundo").style.setProperty("--fonte", getComputedStyle(document.body).fontFamily || "system-ui, sans-serif");
+      const grade = $(".grade");
+      const ok = $(".ok");
+      const som = $(".som input");
+      som.checked = !!pedido.audio;
+      $(".som").hidden = !pedido.audio;
+
+      let fontes = [];
+      let aba = typeof pedido.video === "object" && pedido.video.displaySurface === "monitor" ? "tela" : "janela";
+      let escolhida = null;
+      const cartoes = new Map(); // id -> { el, tela, fonte, desenhada }
+      let fila = [];
+      let ocupados = 0;
+      let aberto = true;
+      const anterior = document.activeElement;
+
+      const atualizarMiniaturas = () => {
+        while (aberto && ocupados < 3 && fila.length) {
+          const c = cartoes.get(fila.shift());
+          if (!c || c.fonte.minimizada || c.fonte.tipo !== aba) continue;
+          ocupados++;
+          desenharMiniatura(c.fonte.id, c.tela).then((deu) => {
+            c.desenhada ||= deu;
+            c.el.querySelector(".vazio").hidden = c.desenhada;
+          }).finally(() => { ocupados--; atualizarMiniaturas(); });
+        }
+      };
+
+      const cartao = (f) => {
+        const el = document.createElement("button");
+        el.className = "cartao";
+        el.setAttribute("role", "option");
+        el.innerHTML = `<div class="mini"><canvas></canvas><div class="vazio"><b></b><span></span></div></div><div class="nome"></div><div class="sub"></div>`;
+        el.addEventListener("click", () => escolher(f.id));
+        el.addEventListener("dblclick", () => { escolher(f.id); confirmar(); });
+        const c = { el, tela: el.querySelector("canvas"), fonte: f, desenhada: false };
+        cartoes.set(f.id, c);
+        return c;
+      };
+
+      const preencher = (c, f) => {
+        c.fonte = f;
+        const el = c.el;
+        el.querySelector(".nome").textContent = f.jogo || f.nome;
+        el.querySelector(".nome").title = f.nome;
+        el.querySelector(".sub").textContent = f.tipo === "tela"
+          ? f.programa + (f.principal ? " · principal" : "")
+          : f.jogo ? (f.minimizada ? "em tela cheia" : f.nome) : f.programa;
+        const vazio = el.querySelector(".vazio");
+        vazio.querySelector("b").textContent = f.jogo || (f.minimizada ? "Minimizada" : "");
+        vazio.querySelector("span").textContent = f.minimizada
+          ? (f.jogo ? "A imagem aparece quando você voltar pro jogo" : "A imagem aparece quando a janela voltar")
+          : "carregando…";
+        vazio.hidden = c.desenhada && !f.minimizada;
+        let selo = el.querySelector(".selo");
+        if (f.jogo && !selo) {
+          selo = document.createElement("span");
+          selo.className = "selo";
+          selo.textContent = "JOGO";
+          el.querySelector(".mini").append(selo);
+        } else if (!f.jogo) selo?.remove();
+      };
+
+      const desenhar = () => {
+        for (const b of raiz.querySelectorAll(".aba")) {
+          b.setAttribute("aria-selected", String(b.dataset.aba === aba));
+          b.querySelector("small").textContent = fontes.filter((f) => f.tipo === b.dataset.aba).length || "";
+        }
+        const daAba = fontes.filter((f) => f.tipo === aba);
+        grade.replaceChildren(...daAba.map((f) => cartoes.get(f.id).el));
+        if (!daAba.length) {
+          const nada = document.createElement("div");
+          nada.className = "nada";
+          nada.textContent = aba === "tela" ? "Nenhuma tela encontrada." : "Nenhum aplicativo aberto.";
+          grade.append(nada);
+        }
+        for (const c of cartoes.values()) c.el.setAttribute("aria-selected", String(c.fonte.id === escolhida));
+        ok.disabled = !fontes.some((f) => f.id === escolhida && f.tipo === aba);
+      };
+
+      const listar = async () => {
+        const novas = await T.invoke("fontes").catch(() => null);
+        if (!aberto) return;
+        if (!novas) return fontes.length ? null : sair(new Error("não deu para listar as janelas"));
+        const primeira = !fontes.length;
+        for (const f of novas) preencher(cartoes.get(f.id) ?? cartao(f), f);
+        for (const id of [...cartoes.keys()]) if (!novas.some((f) => f.id === id)) cartoes.delete(id);
+        fontes = novas;
+        if (primeira) {
+          // jogo aberto: já vem escolhido; senão a tela principal na aba de telas
+          const jogo = fontes.find((f) => f.jogo);
+          if (jogo) [aba, escolhida] = ["janela", jogo.id];
+          else if (aba === "tela") escolhida = fontes.find((f) => f.principal)?.id ?? null;
+        }
+        if (escolhida && !cartoes.has(escolhida)) escolhida = null;
+        desenhar();
+        fila = fontes.filter((f) => f.tipo === aba).map((f) => f.id);
+        atualizarMiniaturas();
+      };
+
+      const escolher = (id) => {
+        escolhida = id;
+        desenhar();
+      };
+      const sair = (erro, valor) => {
+        if (!aberto) return;
+        aberto = false;
+        clearInterval(relogio);
+        removeEventListener("keydown", teclas, true);
+        host.remove();
+        anterior?.focus?.();
+        erro ? reject(erro) : resolve(valor);
+      };
+      const cancelar = () => sair(new DOMException("A pessoa cancelou", "NotAllowedError"));
+      const confirmar = () => {
+        const fonte = fontes.find((f) => f.id === escolhida && f.tipo === aba);
+        if (fonte) sair(null, { fonte, som: !!pedido.audio && som.checked });
+      };
+      const teclas = (e) => {
+        if (e.key === "Escape") cancelar();
+        else if (e.key === "Enter" && !ok.disabled && !e.target?.closest?.("button")) confirmar();
+        else return;
+        e.preventDefault();
+        e.stopPropagation();
+      };
+
+      for (const b of raiz.querySelectorAll(".aba")) {
+        b.addEventListener("click", () => {
+          aba = b.dataset.aba;
+          if (aba === "tela" && !fontes.some((f) => f.id === escolhida && f.tipo === "tela")) escolhida = fontes.find((f) => f.principal)?.id ?? null;
+          desenhar();
+          fila = fontes.filter((f) => f.tipo === aba).map((f) => f.id);
+          atualizarMiniaturas();
+        });
+      }
+      $(".x").addEventListener("click", cancelar);
+      $(".cancelar").addEventListener("click", cancelar);
+      ok.addEventListener("click", confirmar);
+      $(".fundo").addEventListener("mousedown", (e) => e.target === e.currentTarget && cancelar());
+      addEventListener("keydown", teclas, true);
+      document.documentElement.append(host);
+      $(".caixa").focus();
+      listar();
+      const relogio = setInterval(listar, 3000); // janela abriu ou fechou; miniaturas novas
+    });
   }
 
   addEventListener("keydown", async (e) => {
     if (!((mac ? e.metaKey : e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "d")) return;
     e.preventDefault();
-    const texto = await transmissao().catch((err) => "Erro: " + err.message);
-    T.invoke("diagnostico", { texto: seletor ? texto + "\n\nJanelas de jogo ao abrir o seletor:\n" + seletor : texto });
+    let texto = await transmissao().catch((err) => "Erro: " + err.message);
+    if (relato) texto += "\n\n" + relato;
+    if (capturando) texto += "\n" + (await T.invoke("captura_estado").catch((err) => "estado: " + err));
+    T.invoke("diagnostico", { texto });
   });
 
   // o que a minha tela está enviando e por que está limitada

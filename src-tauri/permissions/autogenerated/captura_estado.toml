@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-captura-estado"
+description = "Enables the captura_estado command without any pre-configured scope."
+commands.allow = ["captura_estado"]
+
+[[permission]]
+identifier = "deny-captura-estado"
+description = "Denies the captura_estado command without any pre-configured scope."
+commands.deny = ["captura_estado"]

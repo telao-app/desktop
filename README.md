@@ -11,7 +11,7 @@ O que o app acrescenta:
 
 - som junto da transmissão de tela, sem a voz dos colegas que o próprio app toca:
   - Mac (14.2 ou mais novo): o som do computador, por um tap do CoreAudio que exclui os processos do Telão;
-  - Windows: tela inteira com o som do sistema (opção do seletor); janela com o som só do programa dela
+  - Windows: tela inteira com o som do computador menos o do Telão; janela com o som só do programa dela
     ([nativo/telao-som.cpp](nativo/telao-som.cpp));
   - Linux: ainda não;
 - atalhos e apertar para falar com o app em segundo plano (só escuta o teclado, não rouba a tecla);
@@ -19,9 +19,11 @@ O que o app acrescenta:
 - Ctrl+Shift+D (⌘⇧D no Mac): diagnóstico da transmissão;
 - atualização sozinha: baixa em segundo plano e pergunta se reinicia.
 
-O seletor de tela é o do sistema: no Mac o do macOS, no Windows o do WebView2 (com miniaturas). O app Electron
-tinha um seletor próprio que também mostrava jogo em tela cheia escondido no Windows; no Tauri esse jogo entra
-transmitindo a tela inteira.
+O seletor de tela no Mac é o do macOS. No Windows é próprio (aplicativos e telas inteiras, com miniaturas), porque o
+do WebView2 não mostra jogo em tela cheia exclusiva (fica minimizado enquanto a pessoa está fora dele): o jogo aparece
+marcado e já escolhido, e a imagem chega quando a pessoa volta para ele. A captura é pela API de captura do Windows
+([src-tauri/src/captura.rs](src-tauri/src/captura.rs)) e cada quadro vai para a página por memória compartilhada do
+WebView2, onde vira a faixa de vídeo. Se a captura própria falhar (Windows antigo), volta o seletor do WebView2.
 
 ## Baixar
 

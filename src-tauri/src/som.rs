@@ -1,6 +1,7 @@
 // Som que acompanha a transmissão de tela, entregue à página como PCM int16 estéreo 48 kHz (o ponte.js monta a faixa).
 // Mac: o som do computador sem o que o próprio Telão toca (a voz dos colegas), por um tap do CoreAudio (macOS 14.2+).
-// Windows: o som só do programa da janela escolhida, pelo nativo/telao-som.exe (loopback por processo).
+// Windows: o som só do programa da janela escolhida, ou (tela inteira) o do computador menos o do Telão, pelo
+// nativo/telao-som.exe (loopback por processo).
 use std::sync::Mutex;
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{AppHandle, State};
@@ -49,11 +50,16 @@ mod windows_som {
   pub struct Captura(Child);
 
   impl Captura {
+    // alvo: o hwnd da janela (o som só do programa dela), ou "sistema" (tudo menos o próprio Telão: tela inteira)
     pub fn iniciar(app: &AppHandle, alvo: &str, pcm: Channel<InvokeResponseBody>) -> Result<Self, String> {
-      let hwnd: u64 = alvo.parse().map_err(|_| "janela inválida")?;
+      let args = if alvo == "sistema" {
+        vec!["--sem".to_string(), std::process::id().to_string()]
+      } else {
+        vec![alvo.parse::<u64>().map_err(|_| "janela inválida")?.to_string()]
+      };
       let exe = app.path().resource_dir().map_err(|e| e.to_string())?.join("telao-som.exe");
       let mut filho = Command::new(exe)
-        .arg(hwnd.to_string())
+        .args(args)
         .stdout(Stdio::piped())
         .creation_flags(SEM_JANELA)
         .spawn()

@@ -1,5 +1,7 @@
 // Captura o som de um único programa no Windows (loopback por processo, Windows 10 2004+) e escreve no stdout
 // como PCM 16 bits, 48 kHz, estéreo. Uso: telao-som.exe <hwnd da janela escolhida>
+// telao-som.exe --sem <pid>: o som do computador inteiro menos o desse processo e dos filhos dele (a tela inteira sem a
+// voz dos colegas, que o Telão toca).
 // telao-som.exe --janelas lista as janelas ("hwnd<TAB>pid<TAB>título" em UTF-8): o seletor do Chromium esconde
 // jogos em tela cheia (não respondem a tempo à checagem dele) e o app junta esta lista à dele.
 // Baseado no ApplicationLoopback do Windows-classic-samples da Microsoft.
@@ -57,16 +59,22 @@ static BOOL CALLBACK listar(HWND janela, LPARAM) {
 int wmain(int argc, wchar_t** argv) {
   if (argc < 2) return 2;
   if (wcscmp(argv[1], L"--janelas") == 0) return EnumWindows(listar, 0) ? 0 : 1;
+  const bool sem = wcscmp(argv[1], L"--sem") == 0;
   DWORD pid = 0;
-  GetWindowThreadProcessId(reinterpret_cast<HWND>(static_cast<INT_PTR>(_wtoi64(argv[1]))), &pid);
+  if (sem)
+    pid = argc > 2 ? static_cast<DWORD>(_wtoi64(argv[2])) : 0;
+  else
+    GetWindowThreadProcessId(reinterpret_cast<HWND>(static_cast<INT_PTR>(_wtoi64(argv[1]))), &pid);
   if (!pid) return 3;
   if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED))) return 4;
 
-  // a árvore inteira do processo: jogo com launcher às vezes toca o som num processo filho
+  // a árvore inteira do processo: jogo com launcher às vezes toca o som num processo filho; o WebView2 do Telão (que
+  // toca a voz dos colegas) é filho do Telão
   AUDIOCLIENT_ACTIVATION_PARAMS params = {};
   params.ActivationType = AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK;
   params.ProcessLoopbackParams.TargetProcessId = pid;
-  params.ProcessLoopbackParams.ProcessLoopbackMode = PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE;
+  params.ProcessLoopbackParams.ProcessLoopbackMode =
+      sem ? PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE : PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE;
   PROPVARIANT pv = {};
   pv.vt = VT_BLOB;
   pv.blob.cbSize = sizeof(params);
