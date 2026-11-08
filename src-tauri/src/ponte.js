@@ -512,24 +512,76 @@
     let texto = await transmissao().catch((err) => "Erro: " + err.message);
     if (relato) texto += "\n\n" + relato;
     if (capturando) texto += "\n" + (await T.invoke("captura_estado").catch((err) => "estado: " + err));
+    const vendo = await assistindo().catch((err) => "Assistindo: erro " + err.message);
+    if (vendo) texto += "\n\n" + vendo;
     T.invoke("diagnostico", { texto });
   });
 
-  // o que a minha tela está enviando e por que está limitada
+  // erros de criptografia (E2EE) por pessoa: quadro que não abre vira tela preta
+  const errosCripto = new Map();
+  let salaVista = null;
+  setInterval(() => {
+    const sala = window.__voice?.room;
+    if (!sala?.on || sala === salaVista) return;
+    salaVista = sala;
+    sala.on("encryptionError", (err, p) => {
+      const quem = p?.name || p?.identity || "?";
+      const e = errosCripto.get(quem) || { n: 0 };
+      errosCripto.set(quem, { n: e.n + 1, ultimo: err?.message || String(err) });
+    });
+  }, 2000);
+
+  // o que a minha tela está enviando, por que está limitada e o que o servidor diz que recebe
   async function transmissao() {
     const pub = window.__voice?.room.localParticipant.getTrackPublication("screen_share");
     if (!pub?.track) return "Você não está transmitindo a tela.";
     const c = pub.track.mediaStreamTrack.getSettings();
     const linhas = ["Captura: " + c.width + "x" + c.height + " @ " + c.frameRate];
-    (await pub.track.sender.getStats()).forEach((s) => {
-      if (s.type !== "outbound-rtp" || s.kind !== "video") return;
-      const d = s.qualityLimitationDurations || {};
-      linhas.push("Enviando: " + s.frameWidth + "x" + s.frameHeight + " a " + s.framesPerSecond + " fps",
-        "Limitado por: " + s.qualityLimitationReason + " (cpu " + Math.round(d.cpu || 0) + "s, banda " + Math.round(d.bandwidth || 0) + "s)",
-        "Codificador: " + s.encoderImplementation + (s.powerEfficientEncoder ? " (placa)" : " (processador)"),
-        "Codificação: " + (1000 * s.totalEncodeTime / s.framesEncoded).toFixed(1) + " ms/quadro",
-        "Alvo: " + Math.round((s.targetBitrate || 0) / 1000) + " kbps");
+    const stats = await pub.track.sender.getStats();
+    let parId = null;
+    stats.forEach((s) => {
+      if (s.type === "outbound-rtp" && s.kind === "video") {
+        const d = s.qualityLimitationDurations || {};
+        linhas.push("Enviando: " + s.frameWidth + "x" + s.frameHeight + " a " + s.framesPerSecond + " fps",
+          "Limitado por: " + s.qualityLimitationReason + " (cpu " + Math.round(d.cpu || 0) + "s, banda " + Math.round(d.bandwidth || 0) + "s)",
+          "Codificador: " + s.encoderImplementation + (s.powerEfficientEncoder ? " (placa)" : " (processador)"),
+          "Codificação: " + (1000 * s.totalEncodeTime / s.framesEncoded).toFixed(1) + " ms/quadro",
+          "Alvo: " + Math.round((s.targetBitrate || 0) / 1000) + " kbps",
+          "Quadros-chave: " + s.keyFramesEncoded + " de " + s.framesEncoded + " · pedidos: PLI " + s.pliCount + ", FIR " + s.firCount + ", NACK " + s.nackCount,
+          "Pacotes: " + s.packetsSent + " enviados, " + s.retransmittedPacketsSent + " reenviados");
+      } else if (s.type === "remote-inbound-rtp" && s.kind === "video") {
+        linhas.push("O servidor recebe: " + s.packetsLost + " pacotes perdidos (" + ((s.fractionLost || 0) * 100).toFixed(1) + "% agora), ida e volta " + Math.round((s.roundTripTime || 0) * 1000) + " ms");
+      } else if (s.type === "transport" && s.selectedCandidatePairId) {
+        parId = s.selectedCandidatePairId;
+      }
     });
+    const par = parId && stats.get(parId);
+    if (par) {
+      const l = stats.get(par.localCandidateId) || {};
+      linhas.push("Conexão: " + l.candidateType + " " + l.protocol + (l.relayProtocol ? " (relay " + l.relayProtocol + ")" : "") +
+        " · banda de saída estimada " + Math.round((par.availableOutgoingBitrate || 0) / 1000) + " kbps");
+    }
+    return linhas.join("\n");
+  }
+
+  // as telas dos outros que eu estou assistindo: o que chega e o que dá para mostrar
+  async function assistindo() {
+    const sala = window.__voice?.room;
+    if (!sala) return "";
+    const linhas = [];
+    for (const p of sala.remoteParticipants.values()) {
+      const pub = p.getTrackPublication("screen_share");
+      const quem = p.name || p.identity;
+      if (!pub?.track?.receiver) continue;
+      (await pub.track.receiver.getStats()).forEach((s) => {
+        if (s.type !== "inbound-rtp" || s.kind !== "video") return;
+        linhas.push("Assistindo " + quem + ": " + s.frameWidth + "x" + s.frameHeight + " a " + s.framesPerSecond + " fps (" + pub.track.streamState + ")",
+          "  quadros: " + s.framesReceived + " recebidos, " + s.framesDecoded + " decodificados, " + s.framesDropped + " descartados, " + s.keyFramesDecoded + " chave",
+          "  pacotes: " + s.packetsReceived + " recebidos, " + s.packetsLost + " perdidos · pedidos PLI " + s.pliCount + ", NACK " + s.nackCount,
+          "  travadas: " + s.freezeCount + " (" + (s.totalFreezesDuration || 0).toFixed(1) + " s) · decodificador " + s.decoderImplementation);
+      });
+    }
+    for (const [quem, e] of errosCripto) linhas.push("Erros de criptografia de " + quem + ": " + e.n + " (último: " + e.ultimo + ")");
     return linhas.join("\n");
   }
 })();
