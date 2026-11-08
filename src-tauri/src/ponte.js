@@ -217,6 +217,12 @@
 
   async function capturaPropria(pedido) {
     const escolha = await seletorProprio(pedido);
+    if (escolha.sistema) {
+      // a pessoa preferiu o seletor do WebView2 (o caminho de antes da captura própria)
+      const stream = await peloSistema(pedido);
+      relato = "seletor do Windows (escolhido no seletor do Telão)";
+      return stream;
+    }
     const fonte = escolha.fonte;
     const pedidoFps = typeof pedido.video === "object" ? pedido.video.frameRate : null;
     const fps = Math.round(Math.min(120, Math.max(5, Number(pedidoFps?.max ?? pedidoFps?.ideal ?? pedidoFps) || 30)));
@@ -312,6 +318,9 @@
     footer { display: flex; align-items: center; gap: 12px; padding: 14px 20px 14px 22px; border-top: 1px solid #3a3050; }
     .som { display: flex; align-items: center; gap: 8px; color: #d8d0e6; cursor: pointer; user-select: none; }
     .som input { width: 16px; height: 16px; margin: 0; accent-color: #f7d046; cursor: pointer; }
+    .outro { border: 0; background: transparent; padding: 4px 2px; color: #a69cba; font: inherit; font-size: 13px;
+      text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+    .outro:hover { color: #efeaf7; }
     .acoes { display: flex; gap: 10px; margin-left: auto; }
     .acoes button { border: 0; border-radius: 999px; padding: 10px 20px; font: inherit; font-weight: 700; cursor: pointer; }
     .cancelar { background: #3a2f53; color: #efeaf7; }
@@ -354,6 +363,7 @@
             <div class="grade" role="listbox" aria-label="O que mostrar"></div>
             <footer>
               <label class="som"><input type="checkbox"> Transmitir o som</label>
+              <button class="outro" title="O seletor do WebView2, como antes da 0.2.13 (não mostra jogo em tela cheia)">Usar o seletor do Windows</button>
               <div class="acoes"><button class="cancelar">Cancelar</button><button class="ok" disabled>Mostrar</button></div>
             </footer>
           </div>
@@ -496,6 +506,7 @@
       }
       $(".x").addEventListener("click", cancelar);
       $(".cancelar").addEventListener("click", cancelar);
+      $(".outro").addEventListener("click", () => sair(null, { sistema: true }));
       ok.addEventListener("click", confirmar);
       $(".fundo").addEventListener("mousedown", (e) => e.target === e.currentTarget && cancelar());
       addEventListener("keydown", teclas, true);
