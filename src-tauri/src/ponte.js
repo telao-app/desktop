@@ -77,15 +77,32 @@
   });`;
 
   // Windows: o Chromium do WebView2 rotula a faixa de janela como "window:<hwnd>:0"
-  const janelaDe = (faixa) => /^window:(\d+):/.exec(faixa.label)?.[1] ?? /^window:(\d+):/.exec(faixa.getSettings().deviceId ?? "")?.[1];
+  const janelaDe = (faixa) => /^window:(\d+):/.exec(faixa.label)?.[1] ?? /^window:(\d+):/.exec(faixa.getSettings().deviceId ?? "")?.[1] ?? janelaJogo;
 
   const md = navigator.mediaDevices;
   const nativo = md?.getDisplayMedia?.bind(md);
   let seletor = ""; // o que o app viu das janelas de jogo ao abrir o seletor (vai para o diagnóstico)
+  let janelaJogo = null; // jogo escolhido fora do seletor (o som vem só dele, como numa janela escolhida no seletor)
   // Windows: some a barra "<site> está compartilhando uma janela" do WebView2 (o Telão já mostra e tem o botão de parar)
   const original = nativo && (async (pedido) => {
-    // Windows: jogo em tela cheia minimizado não entra no seletor; o app traz de volta antes de ele abrir
-    if (!mac) seletor = await T.invoke("restaurar_jogos").catch((e) => "falhou: " + e);
+    // Windows: jogo em tela cheia fica minimizado e não entra no seletor; pergunta e pede a captura direto pela janela
+    janelaJogo = null;
+    if (!mac) {
+      const r = await T.invoke("jogos_minimizados").catch((e) => ({ relatorio: "falhou: " + e, minimizados: [] }));
+      seletor = r.relatorio;
+      const jogo = r.minimizados[0];
+      if (jogo && (await T.invoke("perguntar_jogo", { nome: jogo.nome }).catch(() => false))) {
+        try {
+          const s = await md.getUserMedia({ audio: false, video: { mandatory: { chromeMediaSource: "desktop", chromeMediaSourceId: `window:${jogo.hwnd}:0`, maxFrameRate: 60 } } });
+          janelaJogo = jogo.hwnd;
+          seletor += "\ncaptura pelo id da janela: ok";
+          T.invoke("esconder_barra").catch(() => {});
+          return s;
+        } catch (e) {
+          seletor += `\ncaptura pelo id da janela falhou: ${e.name} ${e.message}`; // segue para o seletor normal
+        }
+      }
+    }
     const s = await nativo(pedido);
     if (!mac) T.invoke("esconder_barra").catch(() => {});
     return s;
