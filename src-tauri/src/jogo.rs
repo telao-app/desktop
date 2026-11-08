@@ -133,9 +133,11 @@ pub fn perguntar_jogo(app: tauri::AppHandle, nome: String) -> bool {
   use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
   let mut caixa = app
     .dialog()
-    .message(format!("{nome} está em tela cheia e não aparece na lista de janelas. Transmitir o jogo?"))
+    .message(format!(
+      "{nome} está em tela cheia e não aparece na lista de janelas. Dá para transmitir a tela onde ele está, com o som só do jogo: na próxima janela, escolha essa tela."
+    ))
     .title("Transmitir o jogo")
-    .buttons(MessageDialogButtons::OkCancelCustom(format!("Transmitir {nome}"), "Escolher outra coisa".into()));
+    .buttons(MessageDialogButtons::OkCancelCustom(format!("Transmitir a tela do {nome}"), "Escolher outra coisa".into()));
   if let Some(j) = app.get_webview_window("principal") {
     caixa = caixa.parent(&j);
   }

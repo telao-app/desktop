@@ -100,7 +100,9 @@ pub fn run() {
         #[cfg(windows)]
         icone_bandeja(app)?;
         #[cfg(windows)]
-        barra::esconder_janela_interna(&app.config().identifier);
+        if let Ok(h) = janela.hwnd() {
+          barra::esconder_janela_interna(&app.config().identifier, windows::Win32::Foundation::HWND(h.0));
+        }
         notificacao::iniciar(app.handle());
         abrir::iniciar(app.handle());
         #[cfg(not(debug_assertions))]
