@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fontes"
+description = "Enables the fontes command without any pre-configured scope."
+commands.allow = ["fontes"]
+
+[[permission]]
+identifier = "deny-fontes"
+description = "Denies the fontes command without any pre-configured scope."
+commands.deny = ["fontes"]
