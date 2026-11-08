@@ -81,10 +81,11 @@
 
   const md = navigator.mediaDevices;
   const nativo = md?.getDisplayMedia?.bind(md);
+  let seletor = ""; // o que o app viu das janelas de jogo ao abrir o seletor (vai para o diagnóstico)
   // Windows: some a barra "<site> está compartilhando uma janela" do WebView2 (o Telão já mostra e tem o botão de parar)
   const original = nativo && (async (pedido) => {
     // Windows: jogo em tela cheia minimizado não entra no seletor; o app traz de volta antes de ele abrir
-    if (!mac) await T.invoke("restaurar_jogos").catch(() => {});
+    if (!mac) seletor = await T.invoke("restaurar_jogos").catch((e) => "falhou: " + e);
     const s = await nativo(pedido);
     if (!mac) T.invoke("esconder_barra").catch(() => {});
     return s;
@@ -137,7 +138,8 @@
   addEventListener("keydown", async (e) => {
     if (!((mac ? e.metaKey : e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "d")) return;
     e.preventDefault();
-    T.invoke("diagnostico", { texto: await transmissao().catch((err) => "Erro: " + err.message) });
+    const texto = await transmissao().catch((err) => "Erro: " + err.message);
+    T.invoke("diagnostico", { texto: seletor ? texto + "\n\nJanelas de jogo ao abrir o seletor:\n" + seletor : texto });
   });
 
   // o que a minha tela está enviando e por que está limitada
