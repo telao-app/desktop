@@ -96,6 +96,8 @@
       if (jogo && (await T.invoke("perguntar_jogo", { nome: jogo.nome }).catch(() => false))) {
         janelaJogo = jogo.hwnd;
         seletor += "\ntransmitindo a tela do jogo, com o som da janela dele";
+        // captura própria, passo 1: mede 30 s da janela do jogo (volte para o jogo) e o resultado entra no diagnóstico
+        T.invoke("testar_captura", { hwnd: jogo.hwnd }).then((r) => (seletor += "\ncaptura própria: " + r), (e) => (seletor += "\ncaptura própria falhou: " + e));
         const video = { ...(typeof pedido.video === "object" ? pedido.video : {}), displaySurface: "monitor" };
         const s = await nativo({ ...pedido, video, audio: false });
         T.invoke("esconder_barra").catch(() => {});

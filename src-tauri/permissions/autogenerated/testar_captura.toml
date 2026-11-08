@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-testar-captura"
+description = "Enables the testar_captura command without any pre-configured scope."
+commands.allow = ["testar_captura"]
+
+[[permission]]
+identifier = "deny-testar-captura"
+description = "Denies the testar_captura command without any pre-configured scope."
+commands.deny = ["testar_captura"]
