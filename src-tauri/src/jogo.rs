@@ -77,65 +77,69 @@ fn caminho(pid: u32) -> Option<String> {
   }
 }
 
-// Windows: jogo em tela cheia exclusiva se minimiza quando a pessoa sai dele para escolher a janela, e o seletor do
-// WebView2 não lista janela minimizada. Antes do seletor abrir, traz de volta as janelas minimizadas de jogo (mesma regra
-// do "Jogando X"), sem foco e para trás das outras, para elas aparecerem na lista.
-// Devolve o que viu e fez (vai para o diagnóstico Ctrl+Shift+D): enquanto o jogo não aparece no seletor, é o que diz por quê.
+// Windows: jogo em tela cheia exclusiva fica minimizado enquanto a pessoa está fora dele, e o seletor do WebView2 não
+// lista janela minimizada (trazer de volta sem foco não adianta: o jogo se minimiza de novo). O site pergunta se é para
+// transmitir o jogo e pede a captura direto pela janela. O relatório vai para o diagnóstico (Ctrl+Shift+D).
+#[derive(serde::Serialize)]
+pub struct Seletor {
+  relatorio: String,
+  minimizados: Vec<Minimizado>,
+}
+#[derive(serde::Serialize)]
+pub struct Minimizado {
+  hwnd: String,
+  nome: String,
+}
+
 #[tauri::command(async)]
-pub fn restaurar_jogos() -> String {
+pub fn jogos_minimizados() -> Seletor {
   #[cfg(not(windows))]
-  return String::new();
+  return Seletor { relatorio: String::new(), minimizados: vec![] };
   #[cfg(windows)]
   unsafe {
     use windows::core::BOOL;
-    use windows::Win32::Foundation::{HWND, LPARAM, RECT};
-    use windows::Win32::UI::WindowsAndMessaging::{
-      EnumWindows, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, SetWindowPos, ShowWindow,
-      HWND_BOTTOM, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SW_SHOWNOACTIVATE,
-    };
+    use windows::Win32::Foundation::{HWND, LPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible};
     unsafe extern "system" fn juntar(hwnd: HWND, l: LPARAM) -> BOOL {
       (*(l.0 as *mut Vec<HWND>)).push(hwnd);
       true.into()
     }
-    let estado = |h: HWND| {
-      let mut r = RECT::default();
-      let _ = GetWindowRect(h, &mut r);
-      let mut t = [0u16; 128];
-      let n = GetWindowTextW(h, &mut t) as usize;
-      format!(
-        "\"{}\" visível={} minimizada={} {}x{}",
-        String::from_utf16_lossy(&t[..n]),
-        IsWindowVisible(h).as_bool(),
-        IsIconic(h).as_bool(),
-        r.right - r.left,
-        r.bottom - r.top
-      )
-    };
     let mut janelas: Vec<HWND> = Vec::new();
     let _ = EnumWindows(Some(juntar), LPARAM(&mut janelas as *mut _ as isize));
     let mut relatorio = Vec::new();
-    let mut trazidas = Vec::new();
+    let mut minimizados = Vec::new();
     for h in janelas {
+      let (visivel, minimizada) = (IsWindowVisible(h).as_bool(), IsIconic(h).as_bool());
+      if !visivel {
+        continue;
+      }
       let mut pid = 0u32;
       GetWindowThreadProcessId(h, Some(&mut pid));
       let Some(jogo) = caminho(pid).and_then(|c| nome(&c)) else { continue };
-      relatorio.push(format!("{jogo}: {}", estado(h)));
-      if IsWindowVisible(h).as_bool() && IsIconic(h).as_bool() {
-        let _ = ShowWindow(h, SW_SHOWNOACTIVATE);
-        let _ = SetWindowPos(h, Some(HWND_BOTTOM), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-        trazidas.push(h);
+      let mut t = [0u16; 128];
+      let n = GetWindowTextW(h, &mut t) as usize;
+      relatorio.push(format!("{jogo}: \"{}\" minimizada={minimizada}", String::from_utf16_lossy(&t[..n])));
+      if minimizada {
+        minimizados.push(Minimizado { hwnd: (h.0 as usize).to_string(), nome: jogo });
       }
     }
-    std::thread::sleep(std::time::Duration::from_millis(500));
-    for h in trazidas {
-      relatorio.push(format!("  trazida, 0,5 s depois: {}", estado(h)));
-    }
-    if relatorio.is_empty() {
-      "nenhuma janela de jogo aberta".into()
-    } else {
-      relatorio.join("\n")
-    }
+    Seletor { relatorio: if relatorio.is_empty() { "nenhuma janela de jogo aberta".into() } else { relatorio.join("\n") }, minimizados }
   }
+}
+
+#[tauri::command(async)]
+pub fn perguntar_jogo(app: tauri::AppHandle, nome: String) -> bool {
+  use tauri::Manager;
+  use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
+  let mut caixa = app
+    .dialog()
+    .message(format!("{nome} está em tela cheia e não aparece na lista de janelas. Transmitir o jogo?"))
+    .title("Transmitir o jogo")
+    .buttons(MessageDialogButtons::OkCancelCustom(format!("Transmitir {nome}"), "Escolher outra coisa".into()));
+  if let Some(j) = app.get_webview_window("principal") {
+    caixa = caixa.parent(&j);
+  }
+  caixa.blocking_show()
 }
 
 #[cfg(test)]

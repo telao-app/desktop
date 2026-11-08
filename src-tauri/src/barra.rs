@@ -58,3 +58,17 @@ mod windows_barra {
     }
   }
 }
+
+// Windows: a janela interna do single-instance ("<identificador>-siw", invisível na tela) aparecia como um quadro preto no
+// seletor de janelas. Janela de ferramenta não entra na lista.
+#[cfg(windows)]
+pub fn esconder_janela_interna(identificador: &str) {
+  use windows::core::HSTRING;
+  use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE, WS_EX_TOOLWINDOW};
+  unsafe {
+    if let Ok(h) = FindWindowW(None, &HSTRING::from(format!("{identificador}-siw"))) {
+      let estilo = GetWindowLongPtrW(h, GWL_EXSTYLE);
+      SetWindowLongPtrW(h, GWL_EXSTYLE, estilo | WS_EX_TOOLWINDOW.0 as isize);
+    }
+  }
+}
