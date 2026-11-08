@@ -91,16 +91,15 @@
       const r = await T.invoke("jogos_minimizados").catch((e) => ({ relatorio: "falhou: " + e, minimizados: [] }));
       seletor = r.relatorio;
       const jogo = r.minimizados[0];
+      // Pedir a janela pelo id, sem o seletor, o WebView2 recusa ("Error starting tab capture"): vai a tela onde o jogo
+      // está (o seletor abre na aba de telas) e o som só do jogo, pela janela dele.
       if (jogo && (await T.invoke("perguntar_jogo", { nome: jogo.nome }).catch(() => false))) {
-        try {
-          const s = await md.getUserMedia({ audio: false, video: { mandatory: { chromeMediaSource: "desktop", chromeMediaSourceId: `window:${jogo.hwnd}:0`, maxFrameRate: 60 } } });
-          janelaJogo = jogo.hwnd;
-          seletor += "\ncaptura pelo id da janela: ok";
-          T.invoke("esconder_barra").catch(() => {});
-          return s;
-        } catch (e) {
-          seletor += `\ncaptura pelo id da janela falhou: ${e.name} ${e.message}`; // segue para o seletor normal
-        }
+        janelaJogo = jogo.hwnd;
+        seletor += "\ntransmitindo a tela do jogo, com o som da janela dele";
+        const video = { ...(typeof pedido.video === "object" ? pedido.video : {}), displaySurface: "monitor" };
+        const s = await nativo({ ...pedido, video, audio: false });
+        T.invoke("esconder_barra").catch(() => {});
+        return s;
       }
     }
     const s = await nativo(pedido);
