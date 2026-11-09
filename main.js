@@ -36,7 +36,7 @@ app.whenReady().then(async () => {
   });
 
   janela = new BrowserWindow({
-    width: 1280, height: 800, autoHideMenuBar: true, backgroundColor: '#111214',
+    width: 1280, height: 800, autoHideMenuBar: true, backgroundColor: '#16191A',
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
   janela.loadURL(URL_TELAO);
@@ -132,7 +132,7 @@ async function escolherFonte(fontes) {
     .filter((f) => !['App Icon Window', 'Gesture Blocking Overlay'].includes(f.name))
     .map((f) => ({ id: f.id, nome: f.name, miniatura: (f.thumbnail.isEmpty() ? f.appIcon : f.thumbnail)?.toDataURL() }));
   const seletor = new BrowserWindow({
-    parent: janela, modal: true, width: 900, height: 600, autoHideMenuBar: true, backgroundColor: '#111214',
+    parent: janela, modal: true, width: 900, height: 600, autoHideMenuBar: true, backgroundColor: '#16191A',
   });
   await seletor.loadFile(path.join(__dirname, 'seletor.html'));
   const fechou = new Promise((resolve) => seletor.once('closed', () => resolve(null)));
