@@ -4,7 +4,7 @@
   "description": "O site do Telão (origem remota) chama só os comandos do app; nenhum plugin.",
   "windows": ["principal"],
   "remote": {
-    "urls": ["https://telao.nyxdev.com.br/*", "http://localhost:5173/*"]
+    "urls": ["https://app.telao-app.com.br/*", "http://localhost:5173/*"]
   },
   "permissions": ["allow-teclas", "allow-som", "allow-som-parar", "allow-diagnostico", "allow-jogo", "allow-notificar", "allow-abrir-com-pc", "allow-atualizacao", "allow-atualizar", "allow-esconder-barra", "allow-fontes", "allow-miniatura", "allow-captura", "allow-captura-parar", "allow-captura-estado"]
 }
