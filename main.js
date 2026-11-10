@@ -223,7 +223,7 @@ async function perguntar(versao, reiniciar) {
 }
 
 async function atualizarMac() {
-  const ultima = await fetch('https://api.github.com/repos/telao-app/telao-app-desktop/releases/latest').then((r) => r.json());
+  const ultima = await fetch('https://api.github.com/repos/telao-app/desktop/releases/latest').then((r) => r.json());
   const partes = (v) => String(v).replace(/^v/, '').split(/[.-]/).slice(0, 3).map(Number);
   const [a, b] = [partes(ultima.tag_name), partes(app.getVersion())];
   const nova = a.findIndex((n, i) => n !== b[i]);
@@ -236,7 +236,7 @@ async function atualizarMac() {
   } catch {
     pronta = true;
     const { response } = await dialog.showMessageBox(janela, { message: `Versão nova do Telão: ${ultima.tag_name}`, buttons: ['Baixar', 'Depois'] });
-    if (response === 0) shell.openExternal('https://github.com/telao-app/telao-app-desktop/releases/latest/download/Telao-mac.dmg');
+    if (response === 0) shell.openExternal('https://github.com/telao-app/desktop/releases/latest/download/Telao-mac.dmg');
     return;
   }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'telao-'));
