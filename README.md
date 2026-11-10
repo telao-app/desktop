@@ -1,6 +1,6 @@
 # desktop
 
-App desktop do Telão: uma janela que carrega `https://telao.nyxdev.com.br` e acrescenta o que o navegador não dá.
+App desktop do Telão: uma janela que carrega `https://app.telao-app.com.br` e acrescenta o que o navegador não dá.
 
 - **Mac e Windows: Tauri** ([src-tauri](src-tauri)), com o webview do sistema (WebKit no Mac, WebView2 no Windows).
 - **Linux: Electron** ([main.js](main.js)): no Linux o webview do sistema (WebKitGTK) não tem WebRTC confiável para a voz.

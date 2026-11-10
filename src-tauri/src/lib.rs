@@ -28,7 +28,7 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 
 // ponytail: carrega o site; quando o front for empacotado aqui dentro, deixa de depender do servidor entregar o código
-const URL_PADRAO: &str = "https://telao.nyxdev.com.br";
+const URL_PADRAO: &str = "https://app.telao-app.com.br";
 
 // O WebKit do Mac tem um user agent fixo; o site mostra a versão em "Sobre" lendo "Telao/<versão>" dele
 #[cfg(target_os = "macos")]

@@ -6,7 +6,7 @@ const { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, nativeI
 const { autoUpdater } = require('electron-updater');
 
 // ponytail: carrega o site; quando o front for empacotado aqui dentro, deixa de depender do servidor entregar o código
-const URL_TELAO = process.env.TELAO_URL || 'https://telao.nyxdev.com.br';
+const URL_TELAO = process.env.TELAO_URL || 'https://app.telao-app.com.br';
 
 // O site mostra a versão em "Sobre" lendo do user agent
 app.userAgentFallback += ` Telao/${app.getVersion()}`;
