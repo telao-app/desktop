@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use tauri::AppHandle;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 
-const RELEASES: &str = "https://api.github.com/repos/telao-app/telao-app-desktop/releases/latest";
+const RELEASES: &str = "https://api.github.com/repos/telao-app/desktop/releases/latest";
 #[cfg(target_os = "macos")]
 const ARQUIVO: &str = "Telao-mac.zip";
 #[cfg(windows)]

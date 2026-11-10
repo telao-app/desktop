@@ -34,11 +34,11 @@
     "publish": {
       "provider": "github",
       "owner": "telao-app",
-      "repo": "telao-app-desktop"
+      "repo": "desktop"
     },
     "npmRebuild": false
   },
-  "repository": "github:telao-app/telao-app-desktop",
+  "repository": "github:telao-app/desktop",
   "dependencies": {
     "electron-updater": "^6.8.11",
     "uiohook-napi": "^1.5.5"

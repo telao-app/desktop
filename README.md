@@ -1,4 +1,4 @@
-# telao-app-desktop
+# desktop
 
 App desktop do Telão: uma janela que carrega `https://telao.nyxdev.com.br` e acrescenta o que o navegador não dá.
 
@@ -27,10 +27,10 @@ WebView2, onde vira a faixa de vídeo. Se a captura própria falhar (Windows ant
 
 ## Baixar
 
-- Mac (Apple Silicon): https://github.com/telao-app/telao-app-desktop/releases/latest/download/Telao-mac.dmg
-- Windows: https://github.com/telao-app/telao-app-desktop/releases/latest/download/Telao-windows.exe
-- Linux: https://github.com/telao-app/telao-app-desktop/releases/latest/download/Telao-linux.AppImage
-- Android: https://github.com/telao-app/telao-app-desktop/releases/latest/download/Telao-android.apk (permitir
+- Mac (Apple Silicon): https://github.com/telao-app/desktop/releases/latest/download/Telao-mac.dmg
+- Windows: https://github.com/telao-app/desktop/releases/latest/download/Telao-windows.exe
+- Linux: https://github.com/telao-app/desktop/releases/latest/download/Telao-linux.AppImage
+- Android: https://github.com/telao-app/desktop/releases/latest/download/Telao-android.apk (permitir
   "instalar apps desconhecidos" para o navegador na primeira vez)
 - iOS: ainda não. Sem conta de desenvolvedor da Apple não há `.ipa` instalável; o CI só compila para o simulador
   (artefato `telao-ios-simulador` do workflow)
