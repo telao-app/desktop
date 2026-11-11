@@ -13,6 +13,8 @@ mod captura;
 #[cfg(desktop)]
 mod jogo;
 #[cfg(desktop)]
+mod musica;
+#[cfg(desktop)]
 mod notificacao;
 #[cfg(desktop)]
 mod som;
@@ -54,6 +56,7 @@ pub fn run() {
       som::som,
       som::som_parar,
       jogo::jogo,
+      musica::musica,
       notificacao::notificar,
       abrir::abrir_com_pc,
       atualizar::atualizacao,

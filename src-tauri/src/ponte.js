@@ -7,6 +7,7 @@
 //   escolhida, ou na tela inteira o do computador menos o do Telão.
 // - window.Notification: a notificação do site sai como a do sistema; clicar abre a sala.
 // - window.telaoDesktop.jogo: nome do jogo aberto ("Jogando X"), ou null.
+// - window.telaoDesktop.musica: "Artista - Música" tocando no Spotify ("Ouvindo X"), ou null.
 // - Ctrl+Shift+D (⌘⇧D no Mac): diagnóstico da transmissão.
 (() => {
   const T = window.__TAURI_INTERNALS__;
@@ -35,6 +36,7 @@
         eventos: canal((e) => (e.atalho ? aoApertar(e.atalho) : aoFalar(e.falar))),
       }),
     jogo: () => T.invoke("jogo"),
+    musica: () => T.invoke("musica"),
     abrirComPc: (ligar) => T.invoke("abrir_com_pc", { ligar: ligar ?? null }),
     notificacoes: true,
     atualizacao: () => T.invoke("atualizacao"), // versão nova pronta ("0.2.5") ou null
