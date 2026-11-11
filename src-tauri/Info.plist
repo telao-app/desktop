@@ -10,5 +10,7 @@
   <string>Para você ligar a câmera nas salas do Telão.</string>
   <key>NSAudioCaptureUsageDescription</key>
   <string>Para o som do computador ir junto quando você transmite a tela.</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Para mostrar aos amigos a música que você está ouvindo no Spotify.</string>
 </dict>
 </plist>

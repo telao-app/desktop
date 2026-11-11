@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-musica"
+description = "Enables the musica command without any pre-configured scope."
+commands.allow = ["musica"]
+
+[[permission]]
+identifier = "deny-musica"
+description = "Denies the musica command without any pre-configured scope."
+commands.deny = ["musica"]
