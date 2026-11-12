@@ -110,14 +110,6 @@ pub fn run() {
         let janela = janela.user_agent(&format!("{UA_MAC} Telao/{}", app.package_info().version));
         #[cfg(windows)]
         let janela = janela.user_agent(&ua_windows(&app.package_info().version.to_string()));
-        // A chamada negocia o H.264 "constrained baseline" (42e01f, o único que todo navegador recebe), e no Windows o
-        // Chromium só codifica esse perfil pela placa com PlatformH264CbpEncoding ligado; sem ele a transmissão de tela
-        // ia pelo processador (OpenH264), disputando com o jogo. Os dois primeiros argumentos são o padrão do wry, que
-        // some quando se passa argumento próprio.
-        #[cfg(windows)]
-        let janela = janela.additional_browser_args(
-          "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required --enable-features=PlatformH264CbpEncoding",
-        );
         let janela = janela.build()?;
         // O X esconde (como o Discord): o app segue conectado e avisando. Sair de vez: ⌘Q no Mac, "Sair" no ícone do Windows.
         let escondida = janela.clone();

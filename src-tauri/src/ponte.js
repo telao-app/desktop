@@ -575,9 +575,9 @@
     b.onicecandidate = (e) => e.candidate && a.addIceCandidate(e.candidate);
     const faixa = tela.captureStream(fps).getVideoTracks()[0];
     const t = a.addTransceiver(faixa, { direction: "sendonly", sendEncodings: [{ maxFramerate: fps, maxBitrate: 8e6 }] });
-    // o mesmo perfil que a chamada negocia (42e01f): com outro perfil a placa codifica e o teste engana
+    // o perfil que o site faz o Chromium enviar na chamada (42001f; o 42e01f só sai pelo processador)
     const h264 = RTCRtpSender.getCapabilities("video").codecs.filter((c) => /h264/i.test(c.mimeType));
-    const daChamada = (c) => /42e01f/.test(c.sdpFmtpLine) && /packetization-mode=1/.test(c.sdpFmtpLine);
+    const daChamada = (c) => /42001f/.test(c.sdpFmtpLine) && /packetization-mode=1/.test(c.sdpFmtpLine);
     t.setCodecPreferences([...h264.filter(daChamada), ...h264.filter((c) => !daChamada(c))]);
     await a.setLocalDescription();
     await b.setRemoteDescription(a.localDescription);
