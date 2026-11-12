@@ -527,8 +527,74 @@
     if (capturando) texto += "\n" + (await T.invoke("captura_estado").catch((err) => "estado: " + err));
     const vendo = await assistindo().catch((err) => "Assistindo: erro " + err.message);
     if (vendo) texto += "\n\n" + vendo;
+    texto += "\n\n" + (await placa().catch((err) => "Placa: erro " + err.message));
     T.invoke("diagnostico", { texto });
   });
+
+  // Quem codificou a tela ao longo da transmissão: mostra se começou na placa e caiu para o processador, e quando.
+  let faixaVista = null, inicio = 0, ultimo = "", trocas = [];
+  setInterval(async () => {
+    const faixa = window.__voice?.room?.localParticipant?.getTrackPublication("screen_share")?.track;
+    if (!faixa?.sender) return;
+    if (faixa !== faixaVista) [faixaVista, inicio, ultimo, trocas] = [faixa, Date.now(), "", []];
+    const stats = await faixa.sender.getStats().catch(() => null);
+    stats?.forEach((s) => {
+      if (s.type !== "outbound-rtp" || s.kind !== "video" || !s.encoderImplementation) return;
+      const agora = s.encoderImplementation + (s.powerEfficientEncoder ? " (placa)" : " (processador)");
+      if (agora === ultimo || trocas.length >= 12) return;
+      ultimo = agora;
+      trocas.push(Math.round((Date.now() - inicio) / 1000) + " s: " + agora + " em " + s.frameWidth + "x" + s.frameHeight);
+    });
+  }, 2000);
+
+  // Por que a placa não codifica (Windows): qual placa o app usa, se o codificador H.264 dela aceita 60 e 120 fps e,
+  // na chamada, quem codifica um vídeo de teste local (fora da chamada o navegador esconde o nome do codificador).
+  let bancadas = null;
+  async function placa() {
+    const gl = document.createElement("canvas").getContext("webgl");
+    const info = gl?.getExtension("WEBGL_debug_renderer_info");
+    const linhas = ["Placa do app: " + (info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : "?")];
+    for (const fps of [60, 120]) {
+      const aceita = await VideoEncoder.isConfigSupported({ codec: "avc1.420034", width: 1920, height: 1080, framerate: fps, bitrate: 8e6, hardwareAcceleration: "prefer-hardware", latencyMode: "realtime" })
+        .then((r) => (r.supported ? "aceita" : "recusa"), (e) => "erro " + e.message);
+      linhas.push("Codificador H.264 da placa, 1080p a " + fps + " fps: " + aceita);
+    }
+    if (!mac && window.__voice?.room) {
+      bancadas ||= (async () => "Teste local 1080p: 60 fps " + (await bancada(60)) + " · 120 fps " + (await bancada(120)))().catch((e) => "Teste local: erro " + e.message);
+      linhas.push(await bancadas);
+    }
+    return linhas.join("\n");
+  }
+
+  // Manda um canvas 1080p em H.264 para uma conexão local (sem servidor, sem E2EE) por 2 s e vê quem codificou.
+  async function bancada(fps) {
+    const tela = Object.assign(document.createElement("canvas"), { width: 1920, height: 1080 });
+    const ctx = tela.getContext("2d");
+    const a = new RTCPeerConnection(), b = new RTCPeerConnection();
+    a.onicecandidate = (e) => e.candidate && b.addIceCandidate(e.candidate);
+    b.onicecandidate = (e) => e.candidate && a.addIceCandidate(e.candidate);
+    const faixa = tela.captureStream(fps).getVideoTracks()[0];
+    const t = a.addTransceiver(faixa, { direction: "sendonly", sendEncodings: [{ maxFramerate: fps, maxBitrate: 8e6 }] });
+    t.setCodecPreferences(RTCRtpSender.getCapabilities("video").codecs.filter((c) => /h264/i.test(c.mimeType)));
+    await a.setLocalDescription();
+    await b.setRemoteDescription(a.localDescription);
+    await b.setLocalDescription();
+    await a.setRemoteDescription(b.localDescription);
+    const pintar = setInterval(() => {
+      ctx.fillStyle = `hsl(${Math.random() * 360} 50% 50%)`;
+      ctx.fillRect(0, 0, 1920, 1080);
+    }, 1000 / fps);
+    await new Promise((r) => setTimeout(r, 2000));
+    let quem = "sem resposta";
+    (await t.sender.getStats()).forEach((s) => {
+      if (s.type === "outbound-rtp" && s.encoderImplementation) quem = s.encoderImplementation + (s.powerEfficientEncoder ? " (placa)" : " (processador)");
+    });
+    clearInterval(pintar);
+    faixa.stop();
+    a.close();
+    b.close();
+    return quem;
+  }
 
   // erros de criptografia (E2EE) por pessoa: quadro que não abre vira tela preta
   const errosCripto = new Map();
@@ -558,6 +624,7 @@
         linhas.push("Enviando: " + s.frameWidth + "x" + s.frameHeight + " a " + s.framesPerSecond + " fps",
           "Limitado por: " + s.qualityLimitationReason + " (cpu " + Math.round(d.cpu || 0) + "s, banda " + Math.round(d.bandwidth || 0) + "s)",
           "Codificador: " + s.encoderImplementation + (s.powerEfficientEncoder ? " (placa)" : " (processador)"),
+          "Codec: " + (stats.get(s.codecId)?.sdpFmtpLine || "?") + " · trocas de resolução: " + s.qualityLimitationResolutionChanges,
           "Codificação: " + (1000 * s.totalEncodeTime / s.framesEncoded).toFixed(1) + " ms/quadro",
           "Alvo: " + Math.round((s.targetBitrate || 0) / 1000) + " kbps",
           "Quadros-chave: " + s.keyFramesEncoded + " de " + s.framesEncoded + " · pedidos: PLI " + s.pliCount + ", FIR " + s.firCount + ", NACK " + s.nackCount,
@@ -574,6 +641,7 @@
       linhas.push("Conexão: " + l.candidateType + " " + l.protocol + (l.relayProtocol ? " (relay " + l.relayProtocol + ")" : "") +
         " · banda de saída estimada " + Math.round((par.availableOutgoingBitrate || 0) / 1000) + " kbps");
     }
+    if (trocas.length) linhas.push("Codificadores: " + trocas.join(" → "));
     return linhas.join("\n");
   }
 
