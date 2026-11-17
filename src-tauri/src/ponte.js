@@ -633,7 +633,8 @@
     stats.forEach((s) => {
       if (s.type === "outbound-rtp" && s.kind === "video") {
         const d = s.qualityLimitationDurations || {};
-        linhas.push("Enviando: " + s.frameWidth + "x" + s.frameHeight + " a " + s.framesPerSecond + " fps",
+        // ninguém assistindo: o LiveKit pausa a camada e o navegador não informa tamanho nem fps
+        linhas.push(s.frameWidth ? "Enviando: " + s.frameWidth + "x" + s.frameHeight + " a " + (s.framesPerSecond ?? 0) + " fps" : "Enviando: pausado (ninguém assistindo)",
           "Limitado por: " + s.qualityLimitationReason + " (cpu " + Math.round(d.cpu || 0) + "s, banda " + Math.round(d.bandwidth || 0) + "s)",
           "Codificador: " + s.encoderImplementation + (s.powerEfficientEncoder ? " (placa)" : " (processador)"),
           "Codec: " + (stats.get(s.codecId)?.sdpFmtpLine || "?") + " · trocas de resolução: " + s.qualityLimitationResolutionChanges,
