@@ -212,7 +212,12 @@
     const quadro = (d, buf) => {
       largura = d.w;
       altura = d.h;
-      escrever(new VideoFrame(new Uint8Array(buf, d.o, d.w * d.h * 4), { format: "BGRX", codedWidth: d.w, codedHeight: d.h, timestamp: d.t }));
+      // NV12: já reduzido e convertido pela placa (BT.709 de faixa limitada, como o app converte); BGRX: placa sem o processador de vídeo
+      const nv12 = d.f === "NV12";
+      escrever(new VideoFrame(new Uint8Array(buf, d.o, nv12 ? (d.w * d.h * 3) / 2 : d.w * d.h * 4), {
+        format: nv12 ? "NV12" : "BGRX", codedWidth: d.w, codedHeight: d.h, timestamp: d.t,
+        ...(nv12 && { colorSpace: { primaries: "bt709", transfer: "bt709", matrix: "bt709", fullRange: false } }),
+      }));
     };
     return { faixa, quadro, fechar };
   }
@@ -228,7 +233,11 @@
     const fonte = escolha.fonte;
     const pedidoFps = typeof pedido.video === "object" ? pedido.video.frameRate : null;
     const fps = Math.round(Math.min(120, Math.max(5, Number(pedidoFps?.max ?? pedidoFps?.ideal ?? pedidoFps) || 30)));
-    const v = faixaDeVideo(fonte, fps);
+    // o teto do site (Jogo: 1080p) a placa já aplica; antes saía do tamanho da tela e o navegador reduzia no processador
+    const teto = (k) => Number(pedido.video?.[k]?.max) || 0;
+    // tamanho de antes do primeiro quadro (o LiveKit lê ao publicar), na mesma conta do app
+    const k = Math.min(1, teto("width") / fonte.largura || 1, teto("height") / fonte.altura || 1);
+    const v = faixaDeVideo(fonte.largura ? { ...fonte, largura: Math.floor(fonte.largura * k) & ~1, altura: Math.floor(fonte.altura * k) & ~1 } : fonte, fps);
     let sessao = null;
     let acabou = false;
     const fim = () => {
@@ -242,7 +251,7 @@
         }
       }, 100);
     };
-    sessao = await T.invoke("captura", { id: fonte.id, fps, eventos: canal((m) => m === "fim" && fim()) });
+    sessao = await T.invoke("captura", { id: fonte.id, fps, maximo: [teto("width"), teto("height")], eventos: canal((m) => m === "fim" && fim()) });
     recebedores.set(sessao, v.quadro);
     capturando = true;
     relato = `captura própria: ${fonte.jogo ? "jogo " + fonte.jogo : fonte.nome} (${fonte.id}), ${fps} fps pedidos` +

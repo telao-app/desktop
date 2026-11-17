@@ -5,7 +5,8 @@
 // a faixa de vídeo (MediaStreamTrackGenerator). Mac: segue o seletor do sistema.
 //
 // Memória de cada quadro: CABECALHO bytes (o primeiro i32 é 1 enquanto a página não copiou o quadro, 0 quando está livre)
-// e depois a imagem BGRA sem sobra no fim das linhas. Três buffers giram; se a página atrasa, o quadro é descartado.
+// e depois a imagem sem sobra no fim das linhas: NV12 já no tamanho de envio (reduzida e convertida pela placa, como o
+// OBS faz), ou BGRA do tamanho da fonte se a placa não tiver o processador de vídeo do Direct3D. Três buffers giram; se a página atrasa, o quadro é descartado.
 use serde::Serialize;
 use std::sync::Mutex;
 use tauri::ipc::{Channel, Response};
@@ -61,20 +62,28 @@ pub fn miniatura(id: String) -> Response {
 }
 
 /// Começa a capturar e devolve o número da sessão (vai em cada quadro). `eventos` recebe "fim" quando a janela fecha.
+/// `maximo`: largura e altura máximas do que sai (0 = o tamanho da fonte).
 #[tauri::command]
-pub async fn captura(webview: Webview, estado: State<'_, Estado>, id: String, fps: u32, eventos: Channel<String>) -> Result<u32, String> {
+pub async fn captura(
+  webview: Webview,
+  estado: State<'_, Estado>,
+  id: String,
+  fps: u32,
+  maximo: Option<(u32, u32)>,
+  eventos: Channel<String>,
+) -> Result<u32, String> {
   #[cfg(windows)]
   {
     let mut atual = estado.0.lock().unwrap();
     *atual = None; // uma transmissão de tela por vez
-    let sessao = win::Sessao::iniciar(webview, &id, fps.clamp(1, 240), eventos)?;
+    let sessao = win::Sessao::iniciar(webview, &id, fps.clamp(1, 240), maximo.unwrap_or((0, 0)), eventos)?;
     let n = sessao.numero();
     *atual = Some(sessao);
     Ok(n)
   }
   #[cfg(not(windows))]
   {
-    let _ = (webview, estado, id, fps, eventos);
+    let _ = (webview, estado, id, fps, maximo, eventos);
     Err("só no Windows".into())
   }
 }
@@ -118,10 +127,20 @@ mod win {
   use windows::core::{Interface, BOOL, HSTRING};
   use windows::Win32::Foundation::{HWND, LPARAM, RECT};
   use windows::Win32::Graphics::Direct3D11::{
-    ID3D11Texture2D, D3D11_CPU_ACCESS_READ, D3D11_MAPPED_SUBRESOURCE, D3D11_MAP_READ, D3D11_TEXTURE2D_DESC, D3D11_USAGE_STAGING,
+    ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D, ID3D11VideoContext1, ID3D11VideoDevice, ID3D11VideoProcessor,
+    ID3D11VideoProcessorEnumerator, ID3D11VideoProcessorInputView, ID3D11VideoProcessorOutputView, D3D11_BIND_RENDER_TARGET,
+    D3D11_CPU_ACCESS_READ, D3D11_MAPPED_SUBRESOURCE, D3D11_MAP_READ, D3D11_TEX2D_VPIV, D3D11_TEX2D_VPOV, D3D11_TEXTURE2D_DESC,
+    D3D11_USAGE_DEFAULT, D3D11_USAGE_STAGING, D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE, D3D11_VIDEO_PROCESSOR_CONTENT_DESC,
+    D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC, D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC_0, D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC,
+    D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC_0, D3D11_VIDEO_PROCESSOR_STREAM, D3D11_VIDEO_USAGE_OPTIMAL_SPEED, D3D11_VPIV_DIMENSION_TEXTURE2D,
+    D3D11_VPOV_DIMENSION_TEXTURE2D,
+  };
+  use windows::Win32::Graphics::Dxgi::Common::{
+    DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709, DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709, DXGI_FORMAT, DXGI_FORMAT_NV12, DXGI_RATIONAL,
   };
   use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
   use windows::Win32::Graphics::Dxgi::Common::DXGI_SAMPLE_DESC;
+  use std::mem::ManuallyDrop;
   use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetClassNameW, GetWindow, GetWindowLongPtrW, GetWindowPlacement, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId,
     IsIconic, IsWindow, IsWindowVisible, GWL_EXSTYLE, GW_OWNER, WINDOWPLACEMENT, WS_EX_TOOLWINDOW,
@@ -376,7 +395,7 @@ mod win {
   }
 
   struct Buffers {
-    tam: (u32, u32),
+    tam: (u32, u32, bool),
     geracao: u32,
     lista: Vec<Buf>,
   }
@@ -385,6 +404,7 @@ mod win {
     webview: Webview,
     sessao: u32,
     intervalo: Duration,
+    maximo: (u32, u32),
     parar: AtomicBool,
     bufs: Mutex<Buffers>,
     eventos: Channel<String>,
@@ -393,6 +413,8 @@ mod win {
     descartados: AtomicU32,
     copia_us: AtomicU64,
     tamanho: AtomicU64,
+    fonte: AtomicU64,
+    nv12: AtomicBool,
     inicio: Instant,
   }
 
@@ -436,54 +458,158 @@ mod win {
     Ok(feitos.into_iter().map(|(com, ptr)| Buf { com: Some(com), ptr, enviado: None }).collect())
   }
 
+  fn textura(dev: &ID3D11Device, (w, h): (u32, u32), formato: DXGI_FORMAT, leitura: bool) -> windows::core::Result<ID3D11Texture2D> {
+    let desc = D3D11_TEXTURE2D_DESC {
+      Width: w,
+      Height: h,
+      MipLevels: 1,
+      ArraySize: 1,
+      Format: formato,
+      SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+      Usage: if leitura { D3D11_USAGE_STAGING } else { D3D11_USAGE_DEFAULT },
+      BindFlags: if leitura { 0 } else { D3D11_BIND_RENDER_TARGET.0 as u32 },
+      CPUAccessFlags: if leitura { D3D11_CPU_ACCESS_READ.0 as u32 } else { 0 },
+      MiscFlags: 0,
+    };
+    let mut t = None;
+    unsafe { dev.CreateTexture2D(&desc, None, Some(&mut t))? };
+    t.ok_or_else(windows::core::Error::empty)
+  }
+
+  // textura -> memória compartilhada, linha a linha (a textura pode ter sobra no fim de cada linha). NV12: a parte das
+  // cores vem logo depois das `h` linhas de luz, com a mesma largura de linha, e tem h/2 linhas.
+  fn ler(ctx: &ID3D11DeviceContext, tex: &ID3D11Texture2D, linha: usize, linhas: usize, destino: &mut [u8]) -> windows::core::Result<()> {
+    unsafe {
+      let mut m = D3D11_MAPPED_SUBRESOURCE::default();
+      ctx.Map(tex, 0, D3D11_MAP_READ, 0, Some(&mut m))?;
+      let pitch = m.RowPitch as usize;
+      let fonte = std::slice::from_raw_parts(m.pData as *const u8, pitch * (linhas - 1) + linha);
+      for y in 0..linhas {
+        destino[y * linha..(y + 1) * linha].copy_from_slice(&fonte[y * pitch..y * pitch + linha]);
+      }
+      ctx.Unmap(tex, 0);
+    }
+    Ok(())
+  }
+
+  // Processador de vídeo do Direct3D: reduz e passa de BGRA para NV12 numa passada só, na placa. O quadro lido fica 4 a 5
+  // vezes menor (1440p BGRA: 14,7 MB; 1080p NV12: 3,1 MB) e o navegador não converte mais nada no processador antes de
+  // codificar. Medido sem isso numa RTX 4070 com Cyberpunk: 35 de 120 fps, 26 ms por quadro no codificador.
+  struct Conversor {
+    vc: ID3D11VideoContext1,
+    vd: ID3D11VideoDevice,
+    en: ID3D11VideoProcessorEnumerator,
+    vp: ID3D11VideoProcessor,
+    saida: ID3D11VideoProcessorOutputView,
+    nv12: ID3D11Texture2D,
+    leitura: ID3D11Texture2D,
+    de: (u32, u32),
+    para: (u32, u32),
+  }
+
+  impl Conversor {
+    fn novo(quadro: &Frame, de: (u32, u32), para: (u32, u32)) -> windows::core::Result<Self> {
+      let vd: ID3D11VideoDevice = quadro.device().cast()?;
+      let vc: ID3D11VideoContext1 = quadro.device_context().cast()?;
+      let taxa = DXGI_RATIONAL { Numerator: 60, Denominator: 1 };
+      let cd = D3D11_VIDEO_PROCESSOR_CONTENT_DESC {
+        InputFrameFormat: D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE,
+        InputFrameRate: taxa,
+        InputWidth: de.0,
+        InputHeight: de.1,
+        OutputFrameRate: taxa,
+        OutputWidth: para.0,
+        OutputHeight: para.1,
+        Usage: D3D11_VIDEO_USAGE_OPTIMAL_SPEED,
+      };
+      unsafe {
+        let en = vd.CreateVideoProcessorEnumerator(&cd)?;
+        let vp = vd.CreateVideoProcessor(&en, 0)?;
+        let nv12 = textura(quadro.device(), para, DXGI_FORMAT_NV12, false)?;
+        let leitura = textura(quadro.device(), para, DXGI_FORMAT_NV12, true)?;
+        let od = D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC {
+          ViewDimension: D3D11_VPOV_DIMENSION_TEXTURE2D,
+          Anonymous: D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC_0 { Texture2D: D3D11_TEX2D_VPOV { MipSlice: 0 } },
+        };
+        let mut saida = None;
+        vd.CreateVideoProcessorOutputView(&nv12, &en, &od, Some(&mut saida))?;
+        // tela (RGB cheio) para vídeo BT.709 de faixa limitada, o que o VideoFrame da página declara
+        vc.VideoProcessorSetStreamColorSpace1(&vp, 0, DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709);
+        vc.VideoProcessorSetOutputColorSpace1(&vp, DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709);
+        vc.VideoProcessorSetStreamAutoProcessingMode(&vp, 0, false);
+        Ok(Self { vc, vd, en, vp, saida: saida.ok_or_else(windows::core::Error::empty)?, nv12, leitura, de, para })
+      }
+    }
+
+    fn copiar(&self, quadro: &Frame, destino: &mut [u8]) -> windows::core::Result<()> {
+      let id = D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC {
+        FourCC: 0,
+        ViewDimension: D3D11_VPIV_DIMENSION_TEXTURE2D,
+        Anonymous: D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC_0 { Texture2D: D3D11_TEX2D_VPIV { MipSlice: 0, ArraySlice: 0 } },
+      };
+      unsafe {
+        // o Windows gira as texturas da captura: a vista de entrada é do quadro da vez
+        let mut entrada: Option<ID3D11VideoProcessorInputView> = None;
+        self.vd.CreateVideoProcessorInputView(quadro.as_raw_texture(), &self.en, &id, Some(&mut entrada))?;
+        let mut fluxo = D3D11_VIDEO_PROCESSOR_STREAM { Enable: true.into(), pInputSurface: ManuallyDrop::new(entrada), ..Default::default() };
+        let r = self.vc.VideoProcessorBlt(&self.vp, &self.saida, 0, std::slice::from_ref(&fluxo));
+        ManuallyDrop::drop(&mut fluxo.pInputSurface);
+        r?;
+        let ctx = quadro.device_context();
+        ctx.CopyResource(&self.leitura, &self.nv12);
+        ler(ctx, &self.leitura, self.para.0 as usize, (self.para.1 * 3 / 2) as usize, destino)
+      }
+    }
+  }
+
+  // tamanho de envio: cabe em `maximo` sem mudar a proporção, com lados pares (o NV12 pede)
+  fn caber((w, h): (u32, u32), (mw, mh): (u32, u32)) -> (u32, u32) {
+    let k = [1.0, if mw > 0 { mw as f64 / w as f64 } else { 1.0 }, if mh > 0 { mh as f64 / h as f64 } else { 1.0 }]
+      .into_iter()
+      .fold(f64::INFINITY, f64::min);
+    (((w as f64 * k) as u32 & !1).max(2), ((h as f64 * k) as u32 & !1).max(2))
+  }
+
   struct Envio {
     c: Arc<Compartilhado>,
     /// hora do próximo quadro a mandar
     proximo: Option<Instant>,
-    /// textura que a CPU lê, reaproveitada (o Frame::buffer cria uma nova a cada quadro)
+    conversor: Option<Conversor>,
+    /// o processador de vídeo falhou nesta placa: segue em BGRA do tamanho da fonte
+    sem_conversor: bool,
+    /// textura que a CPU lê no caminho BGRA, reaproveitada
     leitura: Option<(ID3D11Texture2D, u32, u32)>,
   }
 
   impl Envio {
-    // placa de vídeo -> memória compartilhada, linha a linha (a textura pode ter sobra no fim de cada linha)
-    fn copiar(&mut self, quadro: &Frame, destino: &mut [u8]) -> Result<(), Erro> {
+    // caminho BGRA: placa de vídeo -> memória compartilhada, do tamanho da fonte
+    fn copiar_bgra(&mut self, quadro: &Frame, destino: &mut [u8]) -> Result<(), Erro> {
       let (w, h) = (quadro.width(), quadro.height());
       if !self.leitura.as_ref().is_some_and(|(_, lw, lh)| (*lw, *lh) == (w, h)) {
-        let desc = D3D11_TEXTURE2D_DESC {
-          Width: w,
-          Height: h,
-          MipLevels: 1,
-          ArraySize: 1,
-          Format: quadro.desc().Format,
-          SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
-          Usage: D3D11_USAGE_STAGING,
-          BindFlags: 0,
-          CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
-          MiscFlags: 0,
-        };
-        let mut t = None;
-        unsafe { quadro.device().CreateTexture2D(&desc, None, Some(&mut t))? };
-        self.leitura = Some((t.ok_or("textura de leitura")?, w, h));
+        self.leitura = Some((textura(quadro.device(), (w, h), quadro.desc().Format, true)?, w, h));
       }
       let (tex, _, _) = self.leitura.as_ref().unwrap();
-      let ctx = quadro.device_context();
-      let linha = (w * 4) as usize;
-      unsafe {
-        ctx.CopyResource(tex, quadro.as_raw_texture());
-        let mut m = D3D11_MAPPED_SUBRESOURCE::default();
-        ctx.Map(tex, 0, D3D11_MAP_READ, 0, Some(&mut m))?;
-        let pitch = m.RowPitch as usize;
-        let fonte = std::slice::from_raw_parts(m.pData as *const u8, pitch * (h as usize - 1) + linha);
-        if pitch == linha {
-          destino.copy_from_slice(&fonte[..linha * h as usize]);
-        } else {
-          for y in 0..h as usize {
-            destino[y * linha..(y + 1) * linha].copy_from_slice(&fonte[y * pitch..y * pitch + linha]);
+      unsafe { quadro.device_context().CopyResource(tex, quadro.as_raw_texture()) };
+      Ok(ler(quadro.device_context(), tex, (w * 4) as usize, h as usize, destino)?)
+    }
+
+    // prepara o conversor para este tamanho de fonte; None = vai em BGRA
+    fn conversor(&mut self, quadro: &Frame) -> Option<&Conversor> {
+      let de = (quadro.width(), quadro.height());
+      if self.sem_conversor {
+        return None;
+      }
+      if !self.conversor.as_ref().is_some_and(|c| c.de == de) {
+        self.conversor = None;
+        match Conversor::novo(quadro, de, caber(de, self.c.maximo)) {
+          Ok(c) => self.conversor = Some(c),
+          Err(e) => {
+            eprintln!("captura: sem processador de vídeo ({e}), vai em BGRA");
+            self.sem_conversor = true;
           }
         }
-        ctx.Unmap(tex, 0);
       }
-      Ok(())
+      self.conversor.as_ref()
     }
   }
 
@@ -492,7 +618,7 @@ mod win {
     type Error = Erro;
 
     fn new(ctx: Context<Self::Flags>) -> Result<Self, Erro> {
-      Ok(Self { c: ctx.flags, proximo: None, leitura: None })
+      Ok(Self { c: ctx.flags, proximo: None, conversor: None, sem_conversor: false, leitura: None })
     }
 
     fn on_frame_arrived(&mut self, quadro: &mut Frame, ctl: InternalCaptureControl) -> Result<(), Erro> {
@@ -512,20 +638,27 @@ mod win {
         Some(p) if agora < p + c.intervalo => p + c.intervalo,
         _ => agora + c.intervalo,
       });
-      let (w, h) = (quadro.width(), quadro.height());
-      let bytes = CABECALHO + (w * h * 4) as usize;
+      let fonte = (quadro.width(), quadro.height());
+      let (w, h, nv12) = match self.conversor(quadro) {
+        Some(cv) => (cv.para.0, cv.para.1, true),
+        None => (fonte.0, fonte.1, false),
+      };
+      let imagem = if nv12 { (w * h * 3 / 2) as usize } else { (w * h * 4) as usize };
+      let bytes = CABECALHO + imagem;
 
       // tamanho novo (primeiro quadro, janela redimensionada, jogo trocou de resolução): buffers novos
-      if c.bufs.lock().unwrap().tam != (w, h) {
+      if c.bufs.lock().unwrap().tam != (w, h, nv12) {
         let novos = criar(&c.webview, bytes)?;
         let velhos = {
           let mut b = c.bufs.lock().unwrap();
-          b.tam = (w, h);
+          b.tam = (w, h, nv12);
           b.geracao += 1;
           std::mem::replace(&mut b.lista, novos)
         };
         c.soltar(velhos);
         c.tamanho.store(((w as u64) << 32) | h as u64, Ordering::Relaxed);
+        c.fonte.store(((fonte.0 as u64) << 32) | fonte.1 as u64, Ordering::Relaxed);
+        c.nv12.store(nv12, Ordering::Relaxed);
       }
 
       let (i, ptr, geracao) = {
@@ -543,8 +676,21 @@ mod win {
       };
 
       let t0 = Instant::now();
-      let destino = unsafe { std::slice::from_raw_parts_mut((ptr + CABECALHO) as *mut u8, (w * h * 4) as usize) };
-      if let Err(e) = self.copiar(quadro, destino) {
+      let destino = unsafe { std::slice::from_raw_parts_mut((ptr + CABECALHO) as *mut u8, imagem) };
+      let copiado = match self.conversor.as_ref().filter(|_| nv12) {
+        // a placa recusou a textura da captura: daqui em diante vai em BGRA (este quadro se perde)
+        Some(cv) => cv.copiar(quadro, destino).or_else(|e| {
+          eprintln!("captura: processador de vídeo falhou ({e}), vai em BGRA");
+          self.sem_conversor = true;
+          Ok(())
+        }),
+        None => self.copiar_bgra(quadro, destino),
+      };
+      if self.sem_conversor && nv12 {
+        unsafe { &*(ptr as *const AtomicI32) }.store(0, Ordering::Release);
+        return Ok(());
+      }
+      if let Err(e) = copiado {
         unsafe { &*(ptr as *const AtomicI32) }.store(0, Ordering::Release);
         return Err(e);
       }
@@ -553,7 +699,7 @@ mod win {
 
       // carimbo do quadro em microssegundos, no relógio do Windows (o mesmo para todos os quadros)
       let t = quadro.timestamp().map(|t| t.Duration / 10).unwrap_or_else(|_| c.inicio.elapsed().as_micros() as i64);
-      let dados = HSTRING::from(format!(r#"{{"s":{},"i":{i},"w":{w},"h":{h},"t":{t},"o":{CABECALHO}}}"#, c.sessao));
+      let dados = HSTRING::from(format!(r#"{{"s":{},"i":{i},"w":{w},"h":{h},"t":{t},"o":{CABECALHO},"f":"{}"}}"#, c.sessao, if nv12 { "NV12" } else { "BGRX" }));
       let c2 = c.clone();
       let r = c.webview.with_webview(move |wv| {
         let b = c2.bufs.lock().unwrap();
@@ -600,19 +746,22 @@ mod win {
   static PROXIMA: AtomicU32 = AtomicU32::new(1);
 
   impl Sessao {
-    pub fn iniciar(webview: Webview, id: &str, fps: u32, eventos: Channel<String>) -> Result<Self, String> {
+    pub fn iniciar(webview: Webview, id: &str, fps: u32, maximo: (u32, u32), eventos: Channel<String>) -> Result<Self, String> {
       let alvo = Alvo::de(id)?;
       let c = Arc::new(Compartilhado {
         webview,
         sessao: PROXIMA.fetch_add(1, Ordering::Relaxed),
         intervalo: Duration::from_secs_f64(1.0 / fps as f64),
+        maximo,
         parar: AtomicBool::new(false),
-        bufs: Mutex::new(Buffers { tam: (0, 0), geracao: 0, lista: Vec::new() }),
+        bufs: Mutex::new(Buffers { tam: (0, 0, false), geracao: 0, lista: Vec::new() }),
         eventos,
         quadros: AtomicU32::new(0),
         descartados: AtomicU32::new(0),
         copia_us: AtomicU64::new(0),
         tamanho: AtomicU64::new(0),
+        fonte: AtomicU64::new(0),
+        nv12: AtomicBool::new(false),
         inicio: Instant::now(),
       });
       let controle = alvo.iniciar::<Envio>(true, Some(fps), c.clone())?;
@@ -626,12 +775,15 @@ mod win {
     pub fn relatorio(&self) -> String {
       let c = &self.c;
       let (q, d) = (c.quadros.load(Ordering::Relaxed), c.descartados.load(Ordering::Relaxed));
-      let t = c.tamanho.load(Ordering::Relaxed);
+      let (t, f) = (c.tamanho.load(Ordering::Relaxed), c.fonte.load(Ordering::Relaxed));
       let segundos = c.inicio.elapsed().as_secs_f32().max(0.001);
       let copia = c.copia_us.load(Ordering::Relaxed) as f32 / 1000.0 / q.max(1) as f32;
       format!(
-        "{} · {}x{} · {q} quadros em {segundos:.0} s ({:.0} fps), {d} descartados, cópia {copia:.1} ms/quadro",
+        "{} · {}x{} saindo {} {}x{} · {q} quadros em {segundos:.0} s ({:.0} fps), {d} descartados, cópia {copia:.1} ms/quadro",
         self.alvo,
+        f >> 32,
+        f & 0xffff_ffff,
+        if c.nv12.load(Ordering::Relaxed) { "NV12" } else { "BGRA" },
         t >> 32,
         t & 0xffff_ffff,
         q as f32 / segundos
