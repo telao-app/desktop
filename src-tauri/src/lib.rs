@@ -77,6 +77,8 @@ pub fn run() {
       {
         // celular: só o site, com os links de fora abrindo no navegador do sistema
         WebviewWindowBuilder::new(app, "principal", WebviewUrl::External(site))
+          // mesma cor do site: aparece nas faixas das barras do sistema e antes de a página carregar
+          .background_color(tauri::window::Color(0x16, 0x19, 0x1a, 0xff))
           .on_navigation(move |url| url.origin() == origem || fora(url))
           .build()?;
       }

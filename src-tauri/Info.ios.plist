@@ -4,6 +4,8 @@
 <dict>
   <key>CFBundleDisplayName</key>
   <string>Telão</string>
+  <key>UIUserInterfaceStyle</key>
+  <string>Dark</string>
   <key>NSMicrophoneUsageDescription</key>
   <string>Para você falar nas salas de voz do Telão.</string>
   <key>NSCameraUsageDescription</key>
