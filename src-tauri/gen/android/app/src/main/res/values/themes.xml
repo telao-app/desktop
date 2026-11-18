@@ -1,6 +1,15 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Theme.telao" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your theme here. -->
+        <!-- Fundo da janela = fundo do site: aparece nas faixas das barras do sistema e antes do site carregar -->
+        <item name="android:windowBackground">@color/telao_fundo</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item>
+        <item name="android:enforceStatusBarContrast" tools:targetApi="29">false</item>
+        <!-- Câmera frontal em furo/notch: desenha por baixo dela (o recuo é tratado em MainActivity), em qualquer orientação -->
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28">shortEdges</item>
+        <!-- Site escuro: ícones claros nas barras -->
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>
