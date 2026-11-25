@@ -4,6 +4,7 @@ const path = require('node:path');
 const { execFile, spawn } = require('node:child_process');
 const { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, nativeImage, session, shell, systemPreferences } = require('electron');
 const { autoUpdater } = require('electron-updater');
+const { protegido } = require('./origem.js');
 
 // ponytail: carrega o site; quando o front for empacotado aqui dentro, deixa de depender do servidor entregar o código
 const URL_TELAO = process.env.TELAO_URL || 'https://app.telao-app.com.br';
@@ -17,12 +18,13 @@ app.whenReady().then(async () => {
     await systemPreferences.askForMediaAccess('camera');
   }
   // Windows: o preload abre o seletor antes do getDisplayMedia para saber se é janela (som só do programa dela)
-  ipcMain.handle('escolher-fonte', async () => {
+  // Só a origem do Telão (URL_TELAO) chama os comandos nativos; outra é recusada e registrada no console.
+  ipcMain.handle('escolher-fonte', protegido(URL_TELAO, 'escolher-fonte', async () => {
     escolhida = await escolher();
     return escolhida && { id: escolhida.id, janela: escolhida.id.startsWith('window:') };
-  });
-  ipcMain.on('som-janela', (e, id) => somDaJanela(e.sender, id));
-  ipcMain.handle('teclas', (_e, t) => teclas(t));
+  }));
+  ipcMain.on('som-janela', protegido(URL_TELAO, 'som-janela', (e, id) => somDaJanela(e.sender, id), { rejeitar: false }));
+  ipcMain.handle('teclas', protegido(URL_TELAO, 'teclas', (_e, t) => teclas(t)));
 
   session.defaultSession.setDisplayMediaRequestHandler(async (req, callback) => {
     const escolha = escolhida ?? (await escolher());

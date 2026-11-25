@@ -8,6 +8,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "electron .",
+    "test": "node --test test/*.test.js",
     "dist": "electron-builder --linux --publish never",
     "tauri": "tauri",
     "start:tauri": "cargo run --manifest-path src-tauri/Cargo.toml",
@@ -22,6 +23,7 @@
     "appId": "app.telao",
     "files": [
       "main.js",
+      "origem.js",
       "preload.js",
       "seletor.html",
       "package.json"
@@ -42,5 +44,8 @@
   "dependencies": {
     "electron-updater": "^6.8.11",
     "uiohook-napi": "^1.5.5"
+  },
+  "overrides": {
+    "minimatch@>=7.0.0 <11.0.1": "11.0.9"
   }
 }
